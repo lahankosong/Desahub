@@ -1,0 +1,11 @@
+{
+    "name": "Kurir",
+    "alias": "kurir",
+    "description": "Modul Kurir — online/offline, klaim order (UPDATE atomik), update status antar",
+    "keywords": [],
+    "priority": 6,
+    "providers": [
+        "Modules\\Kurir\\app\\Providers\\KurirServiceProvider"
+    ],
+    "files": []
+}

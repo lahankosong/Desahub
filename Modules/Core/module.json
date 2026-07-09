@@ -1,0 +1,11 @@
+{
+    "name": "Core",
+    "alias": "core",
+    "description": "Modul inti — kontrak Sellable, ComplianceReportable, BuyerEligibilityPolicy, trait log ketersediaan, helper query radius",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\Core\\app\\Providers\\CoreServiceProvider"
+    ],
+    "files": []
+}

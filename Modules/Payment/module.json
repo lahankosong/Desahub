@@ -1,0 +1,11 @@
+{
+    "name": "Payment",
+    "alias": "payment",
+    "description": "Modul Payment — konfirmasi COD, event PembayaranDiterima, settlement",
+    "keywords": [],
+    "priority": 5,
+    "providers": [
+        "Modules\\Payment\\app\\Providers\\PaymentServiceProvider"
+    ],
+    "files": []
+}

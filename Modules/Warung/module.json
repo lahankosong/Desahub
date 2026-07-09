@@ -1,0 +1,11 @@
+{
+    "name": "Warung",
+    "alias": "warung",
+    "description": "Vertikal pertama: produk sembako, implementasi Sellable, tingkatan Warung Biasa vs Grosir",
+    "keywords": [],
+    "priority": 3,
+    "providers": [
+        "Modules\\Warung\\app\\Providers\\WarungServiceProvider"
+    ],
+    "files": []
+}

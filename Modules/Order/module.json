@@ -1,0 +1,11 @@
+{
+    "name": "Order",
+    "alias": "order",
+    "description": "Modul Order — checkout, order_items polymorphic, buyer polymorphic, state machine",
+    "keywords": [],
+    "priority": 4,
+    "providers": [
+        "Modules\\Order\\app\\Providers\\OrderServiceProvider"
+    ],
+    "files": []
+}

@@ -1,0 +1,26 @@
+<?php
+
+namespace Modules\Admin\database\seeders;
+
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
+
+class AdminDatabaseSeeder extends Seeder
+{
+    public function run(): void
+    {
+        // Buat admin user kalau belum ada
+        $exists = DB::table('users')->where('hp', '081234567890')->exists();
+
+        if (! $exists) {
+            DB::table('users')->insert([
+                'nama'       => 'Super Admin',
+                'hp'         => '081234567890',
+                'password'   => Hash::make('admin123'),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+    }
+}

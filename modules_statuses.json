@@ -1,0 +1,10 @@
+{
+    "Core": true,
+    "Auth": true,
+    "Outlet": true,
+    "Warung": true,
+    "Order": true,
+    "Payment": true,
+    "Kurir": true,
+    "Admin": true
+}

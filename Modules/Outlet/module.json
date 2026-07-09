@@ -1,0 +1,11 @@
+{
+    "name": "Outlet",
+    "alias": "outlet",
+    "description": "Modul Outlet — registrasi outlet, outlet_vertikal pivot, verifikasi, pencarian radius",
+    "keywords": [],
+    "priority": 2,
+    "providers": [
+        "Modules\\Outlet\\app\\Providers\\OutletServiceProvider"
+    ],
+    "files": []
+}
