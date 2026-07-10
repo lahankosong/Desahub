@@ -1,0 +1,17 @@
+{
+    "name": "Desahub Kurir",
+    "short_name": "Kurir",
+    "start_url": "/kurir",
+    "scope": "/kurir/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#198754",
+    "description": "Antar order dan update status",
+    "icons": [
+        {
+            "src": "/favicon.ico",
+            "sizes": "64x64",
+            "type": "image/x-icon"
+        }
+    ]
+}

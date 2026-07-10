@@ -9,6 +9,7 @@
         "laravel/framework": "^11.0",
         "laravel/sanctum": "*",
         "laravel/tinker": "^2.10",
+        "livewire/livewire": "*",
         "nwidart/laravel-modules": "^11.0"
     },
     "require-dev": {

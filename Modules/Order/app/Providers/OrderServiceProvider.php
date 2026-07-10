@@ -25,7 +25,6 @@ class OrderServiceProvider extends ServiceProvider
 
         // Daftarkan Listener untuk Event OrderDibatalkan
         Event::listen(OrderDibatalkan::class, PembatalanKetersediaanListener::class);
-        Event::listen(OrderDibatalkan::class, StatusSelesaiListener::class);
 
         // API routes
         \Illuminate\Support\Facades\Route::prefix('api')

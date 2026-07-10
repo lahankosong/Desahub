@@ -2,6 +2,15 @@
 
 namespace Modules\Core\app\Contracts;
 
+/**
+ * Kontrak Sellable — implementasikan oleh setiap model produk per-vertikal.
+ *
+ * Order hanya menyimpan referensi polymorphic (sellable_type + sellable_id),
+ * tidak pernah tahu isi produk. Semua interaksi dengan produk dilakukan
+ * lewat kontrak ini.
+ *
+ * @see project.md bagian "Kontrak Sellable"
+ */
 interface Sellable
 {
     /**
@@ -10,31 +19,35 @@ interface Sellable
     public function getNama(): string;
 
     /**
-     * Harga saat ini, terima parameter qty supaya vertikal yang butuh
-     * harga bertingkat (mis. Warung Grosir) bisa terapkan price-break.
+     * Harga saat ini untuk kuantitas tertentu.
+     *
+     * Menerima parameter qty supaya vertikal yang butuh harga bertingkat
+     * (mis. Warung Grosir) bisa terapkan price-break.
      * Vertikal biasa cukup selalu return harga tetap terlepas qty.
      */
     public function getHarga(int $qty = 1): float;
 
     /**
-     * Satuan produk: pcs / kg / sak / porsi, dst.
+     * Satuan produk (pcs / kg / sak / porsi, dst).
      */
     public function getSatuan(): string;
 
     /**
-     * Cek apakah item boleh dibeli untuk qty tertentu.
-     * Stok fisik ATAU status tersedia/habis, tergantung vertikal.
+     * Cek apakah item tersedia untuk dibeli sejumlah qty.
+     *
+     * Untuk vertikal berbasis stok angka (Warung, Apotik): return true jika stok >= qty.
+     * Untuk vertikal non-stok (Warung Makan): return true/false berdasarkan status tersedia/habis.
      */
-    public function cekTersedia(int $qty = 1): bool;
+    public function cekTersedia(int $qty): bool;
 
     /**
-     * Logika spesifik vertikal saat pengurangan terjadi:
-     * - Warung/Apotik: kurangi stok fisik
-     * - WarungMakan: bisa no-op (bukan stok angka)
+     * Proses pengurangan setelah order.
+     *
+     * Untuk vertikal berbasis stok: kurangi stok fisik.
+     * Untuk vertikal non-stok: bisa no-op.
      *
      * @param int $qty Jumlah yang dikurangi
-     * @param int|null $referensiId ID referensi (mis. order_id) penyebab perubahan
-     * @return void
+     * @param int $referensiId ID referensi (biasanya order_id) untuk audit trail
      */
-    public function prosesPengurangan(int $qty, ?int $referensiId = null): void;
+    public function prosesPengurangan(int $qty, int $referensiId): void;
 }

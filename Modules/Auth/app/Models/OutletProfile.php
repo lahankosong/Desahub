@@ -7,7 +7,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class OutletProfile extends Model
 {
-    protected $fillable = ['user_id'];
+    protected $fillable = [
+        'user_id',
+        'nik',
+        'foto_ktp',
+        'foto_selfie_ktp',
+    ];
 
     public function user(): BelongsTo
     {

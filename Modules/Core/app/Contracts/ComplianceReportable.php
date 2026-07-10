@@ -3,30 +3,43 @@
 namespace Modules\Core\app\Contracts;
 
 /**
- * Kontrak opsional untuk vertikal yang punya kewajiban pelaporan ke pemerintah.
- * Hanya diimplementasikan oleh vertikal teregulasi:
- * - Apotik: resep obat
- * - TokoPupuk: subsidi by NIK petani
+ * Kontrak ComplianceReportable — opsional, khusus vertikal teregulasi.
+ *
+ * Hanya diimplementasikan oleh vertikal yang punya kewajiban pelaporan
+ * ke pemerintah (Apotik: resep obat, Toko Pupuk: subsidi by NIK petani).
  *
  * Modul Compliance mendengarkan Event OrderDibuat/PembayaranDiterima,
- * cek instanceof ComplianceReportable, lalu catat ke compliance_reports.
+ * cek instanceof ComplianceReportable, lalu catat ke compliance_reports
+ * (append-only). Modul Order/Payment tidak pernah disentuh.
+ *
+ * @see project.md bagian "Kontrak ComplianceReportable"
  */
 interface ComplianceReportable
 {
     /**
-     * Jenis regulasi yang berlaku untuk vertikal ini.
-     * Contoh: 'resep_obat', 'pupuk_nik'
+     * Kode vertikal untuk keperluan pelaporan.
+     * Contoh: 'apotik', 'toko_pupuk'
      */
-    public function getJenisRegulasi(): string;
+    public function getVertikalKode(): string;
 
     /**
-     * Data tambahan yang wajib dilaporkan terkait transaksi ini.
-     * Return array dengan field spesifik regulasi (mis. no_resep, nik_petani, dll).
+     * Data tambahan yang wajib dilampirkan dalam laporan compliance.
+     *
+     * Return array dengan struktur bebas sesuai kebutuhan vertikal,
+     * mis. Apotik: ['no_resep' => '...', 'dokter' => '...'],
+     * Toko Pupuk: ['nik_petani' => '...', 'no_subsidi' => '...'].
      */
-    public function getDataPelaporan(): array;
+    public function getComplianceData(): array;
 
     /**
-     * Apakah item ini wajib dilaporkan untuk transaksi tertentu?
+     * Tipe laporan yang dibutuhkan.
+     * Return array of string, mis. ['penjualan', 'pembelian'].
      */
-    public function wajibDilaporkan(): bool;
+    public function getJenisLaporan(): array;
+
+    /**
+     * Apakah vertikal ini membutuhkan pelaporan pemerintah?
+     * Bisa dinamis — mis. produk tertentu saja yang perlu dilaporkan.
+     */
+    public function perluDilaporkan(): bool;
 }

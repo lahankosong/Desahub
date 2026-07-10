@@ -1,10 +1,10 @@
 {
     "Core": true,
     "Auth": true,
-    "Outlet": true,
-    "Warung": true,
-    "Order": true,
-    "Payment": true,
-    "Kurir": true,
-    "Admin": true
+    "Outlet": false,
+    "Warung": false,
+    "Order": false,
+    "Payment": false,
+    "Kurir": false,
+    "Admin": false
 }

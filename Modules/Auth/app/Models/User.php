@@ -3,42 +3,69 @@
 namespace Modules\Auth\app\Models;
 
 use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
-    use HasApiTokens, Notifiable;
+    use HasApiTokens, SoftDeletes;
 
     protected $fillable = [
         'nama',
-        'hp',
+        'no_hp',
         'password',
+        'email',
+        'no_hp_verified_at',
+        'otp_code',
+        'otp_expires_at',
     ];
 
     protected $hidden = [
         'password',
+        'remember_token',
+        'otp_code',
     ];
 
-    protected function casts(): array
+    protected $casts = [
+        'no_hp_verified_at' => 'datetime',
+        'otp_expires_at' => 'datetime',
+    ];
+
+    /**
+     * Relasi ke profil outlet (jika user mendaftarkan outlet).
+     */
+    public function outletProfile(): HasOne
     {
-        return [
-            'password' => 'hashed',
-        ];
+        return $this->hasOne(OutletProfile::class);
     }
 
-    public function outletProfile()
+    /**
+     * Relasi ke profil konsumen (default semua user punya).
+     */
+    public function konsumenProfile(): HasOne
     {
-        return $this->hasOne(\Modules\Auth\app\Models\OutletProfile::class, 'user_id');
+        return $this->hasOne(KonsumenProfile::class);
     }
 
-    public function konsumenProfile()
+    /**
+     * Relasi ke profil kurir (jika user daftar/diterima sebagai kurir).
+     */
+    public function kurirProfile(): HasOne
     {
-        return $this->hasOne(\Modules\Auth\app\Models\KonsumenProfile::class, 'user_id');
+        return $this->hasOne(KurirProfile::class);
     }
 
-    public function kurirProfile()
+    /**
+     * Cek apakah user punya peran tertentu (via profil).
+     */
+    public function hasRole(string $role): bool
     {
-        return $this->hasOne(\Modules\Auth\app\Models\KurirProfile::class, 'user_id');
+        return match ($role) {
+            'outlet' => $this->outletProfile()->exists(),
+            'konsumen' => $this->konsumenProfile()->exists(),
+            'kurir' => $this->kurirProfile()->exists(),
+            default => false,
+        };
     }
 }
