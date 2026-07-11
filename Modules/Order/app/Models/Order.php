@@ -110,6 +110,7 @@ class Order extends Model
         $items = $this->items->map(fn($item) => [
             'sellable_type' => $item->sellable_type,
             'sellable_id'   => $item->sellable_id,
+            'nama_produk'   => $item->nama_produk,
             'qty'            => $item->qty,
             'harga_satuan'   => $item->harga_satuan,
         ])->toArray();

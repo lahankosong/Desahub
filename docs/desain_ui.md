@@ -154,23 +154,46 @@ Bentuk pil, warna mengikuti makna, bukan dekorasi:
 
 ### 2. App Warung
 
-**Dashboard**
+**Top Nav (revisi Sesi 15)**
 ```
 ┌─────────────────────────┐
-│ Warung Bu Siti  [● Biasa] │
+│ 🏪 Warung Bu Siti      👤▾ │  <- nama OUTLET, bukan nama pemilik
+└─────────────────────────┘
+        ↓ tap 👤▾
+      ┌─────────────────┐
+      │ ⚙ Pengaturan Profil│
+      │ ─────────────────│
+      │ ↪ Keluar            │
+      └─────────────────┘
+```
+- Nama pribadi pemilik TIDAK ditampilkan di top nav — yang tampil nama warung/outlet, karena ini identitas yang relevan buat konteks kerja (pemilik bisa saja punya beberapa outlet nanti)
+- Dropdown profil pindah ke top nav, isinya: "Pengaturan Profil" (ke halaman profil lengkap) + "Keluar" — menggantikan tab Profil yang sebelumnya di bottom nav
+
+**Dashboard (Beranda — sekarang menggabungkan Laporan, Sesi 15)**
+```
+┌─────────────────────────┐
+│ [● Biasa]                  │
 ├─────────────────────────┤
-│ 🔔 3 Order Baru            │
-│ ⚠️ 2 Produk Hampir Habis   │
+│ 🔔 3 Order Baru             │
+│ 💬 2 Chat Belum Dibalas      │
+│ ⚠️ 2 Produk Hampir Habis    │
 ├─────────────────────────┤
-│ Order Hari Ini: 12          │
-│ Omzet Hari Ini: Rp850rb     │
+│ Order Hari Ini: 12           │
+│ Omzet Hari Ini: Rp850rb      │
 ├─────────────────────────┤
-│ 🏠  📦Order  (POS)  🛍Produk  👤 │
+│ 📊 Ringkasan Laporan          │
+│ (grafik omzet mingguan,       │
+│  top produk, dari halaman     │
+│  Laporan yang sebelumnya      │
+│  terpisah)                    │
+├─────────────────────────┤
+│ 🏠  📦Order  (POS)  🛍Produk  💬Chat │
 └─────────────────────────┘
 ```
-- Badge tier (`Biasa`/`Grosir`) selalu terlihat di header — pengingat visual status akun
-- **Prinsip (dari `aturan_bisnis.md`, direkonsiliasi):** Dashboard Warung BUKAN sekadar statistik pasif — tapi **daftar pekerjaan yang harus segera dilakukan hari ini** (order baru butuh respon, stok yang perlu direstock, dst). Wireframe di atas sudah mengarah ke sini (notifikasi di atas statistik), prinsip ini jadi acuan eksplisit saat menambah widget baru ke dashboard nanti.
-- `(POS)` = tombol bulat menonjol di tengah bottom nav, beda ukuran/style dari 4 item lain — akses cepat 1 tap ke layar kasir (desain lengkap di `pos.md`)
+- Badge tier (`Biasa`/`Grosir`) tetap terlihat di header
+- **Laporan digabung ke Beranda** (Sesi 15) — bukan lagi tab terpisah di bottom nav. Isi laporan yang sebelumnya di halaman sendiri (grafik omzet, top produk) sekarang jadi bagian scroll-down dari Beranda.
+- **Prinsip (dari `aturan_bisnis.md`, direkonsiliasi):** Dashboard Warung BUKAN sekadar statistik pasif — tapi **daftar pekerjaan yang harus segera dilakukan hari ini**. Notifikasi (order baru, chat belum dibalas, stok tipis) tetap di atas, statistik/laporan di bawahnya.
+- **Bottom nav baru (5 slot, simetris):** Beranda | Order | **(POS, tombol bulat tengah)** | Produk | Chat — Laporan & Profil TIDAK lagi di bottom nav (Laporan digabung ke Beranda, Profil pindah ke top nav)
 
 **Order Masuk**
 ```
@@ -189,6 +212,37 @@ Bentuk pil, warna mengikuti makna, bukan dekorasi:
 └─────────────────────────┘
 ```
 - Badge metode pengiriman (🏍 Diantar Kurir / 🚶 Ambil Sendiri) membedakan order yang perlu diteruskan ke Kurir vs yang tinggal ditunggu diambil langsung — keduanya tetap muncul di layar yang sama, transaksi POS TIDAK muncul di sini (POS langsung selesai, tidak ada tahap "menunggu")
+
+**Chat (baru, Sesi 15)**
+```
+┌─────────────────────────┐
+│ ← Chat                     │
+├─────────────────────────┤
+│ 👤 Budi Santoso              │
+│ "Beras 5kg masih ada?"       │
+│ 2 menit lalu          [●2]  │
+├─────────────────────────┤
+│ 👤 Siti Aminah                │
+│ "Bisa dikirim sore?"          │
+│ 1 jam lalu                    │
+└─────────────────────────┘
+       ↓ tap salah satu
+┌─────────────────────────┐
+│ ← Budi Santoso               │
+├─────────────────────────┤
+│         "Beras 5kg ada?"     │
+│                     14:02 ●  │
+│                               │
+│ "Ada, stok 12" ←              │
+│ 14:05                        │
+├─────────────────────────┤
+│ [Tulis pesan...]      [Kirim]│
+└─────────────────────────┘
+```
+- List percakapan diurutkan pesan terbaru di atas, badge angka = pesan belum dibaca
+- Bukan real-time — halaman polling ringan tiap beberapa detik saat dibuka, bukan push instan (konsisten batasan Livewire)
+
+---
 
 **Kelola Produk**
 ```

@@ -35,6 +35,92 @@
 
 ## Log Aktivitas
 
+### [2026-07-11] [Komputer: Laptop 1] — ✅ Sesi 23 — Overhaul POS Kasir + PelangganWarung + Piutang
+
+**Aktivitas:**
+- [x] **Scan Barcode Client-Side:** hardware scanner (keyboard Enter) + kamera (BarcodeDetector API, Chrome 88+) + modal manual search
+  - WAJIB cocokkan di sisi klien dulu dari `produkData` lokal (offline), fallback API server hanya jika tidak ketemu
+- [x] **Keranjang Interaktif:** qty stepper `−` `+` per item, subtotal per item, rinci total
+- [x] **Pembayaran Cash:** input uang diterima, hitung kembalian otomatis, quick suggest nominal bulat (pas, 1rb, 5rb, 10rb, 50rb, 100rb)
+- [x] **Pembayaran Tempo (Piutang):** `buyer_type` baru `PelangganWarung` — buku pelanggan milik warung sendiri (nama, no HP, catatan), BUKAN akun Konsumen
+  - Tabel `pelanggan_warung` — migration, model, API controller
+  - Tabel `piutang` — terpisah dari `cod_settlements`, dengan status (aktif/lunas/gagal_bayar), jatuh_tempo, sisa = jumlah - terbayar
+  - Tambah pelanggan baru online-only, pilih pelanggan existing dari cache localStorage (offline)
+  - Konfirmasi tempo: ikon jam + info pelanggan + jatuh tempo
+- [x] **Fix Schema Orders:**
+  - `buyer_id` dibuat nullable (POS walk-in: buyer_type=Umum, buyer_id=null)
+  - Enum `metode_pembayaran` tambah `tunai_pos` dan `tempo`
+  - Migration: `2026_07_11_000007_add_pos_fields_to_orders.php`
+- [x] **Fix Bug `nama_produk` NOT NULL:** kolom `nama_produk` di `order_items` dibuat nullable
+  - Migration: `2026_07_11_000008_make_nama_produk_nullable.php`
+  - `CheckoutController` diupdate untuk explicit isi `nama_produk`
+- [x] **Update `produkList` route:** tambah field `barcode` supaya client-side scan bisa match offline
+- [x] **`posTransaksi()` di `ProdukWebController`:** support `metode` (cash/tempo), validasi pelanggan_id untuk tempo, buat `Piutang` record
+- [x] `php artisan migrate` — 4 migration baru (000005-000008) sukses
+
+**File baru:**
+- `Modules/Warung/database/migrations/2026_07_11_000005_create_pelanggan_warung_table.php`
+- `Modules/Warung/database/migrations/2026_07_11_000006_create_piutang_table.php`
+- `Modules/Warung/app/Models/PelangganWarung.php`
+- `Modules/Warung/app/Models/Piutang.php`
+- `app/Http/Controllers/Warung/PosController.php`
+- `Modules/Order/database/migrations/2026_07_11_000007_add_pos_fields_to_orders.php`
+- `Modules/Order/database/migrations/2026_07_11_000008_make_nama_produk_nullable.php`
+
+**File diubah:**
+- `resources/views/warung/pos.blade.php` — overhaul total (~1000 baris)
+- `app/Http/Controllers/Warung/ProdukWebController.php` — `posTransaksi()` rewrite
+- `app/Http/Controllers/Konsumen/CheckoutController.php` — tambah `nama_produk`
+- `routes/web.php` — 4 route PosController + barcode di produkList + import
+
+**Error ditemukan & difix:**
+| # | Error | Penyebab | Solusi | Status |
+|---|-------|----------|--------|--------|
+| 39 | `Field 'nama_produk' doesn't have a default value` (CheckoutController) | Kolom `nama_produk` NOT NULL tanpa default, CheckoutController tidak isi | Migration nullable + fix CheckoutController | ✅ |
+
+### [2026-07-11] [Komputer: Laptop 1] — ✅ Sesi 22 — Chat Warung (Sesi 15 lanjutan) + Bug Fix Cascade
+
+**Aktivitas:**
+- [x] **git pull origin master** — sinkronisasi kode terbaru dari GitHub
+- [x] **Modul Chat Konsumen-Outlet (Sesi 15):**
+  - Migration: `database/migrations/2026_07_11_000004_create_chat_tables.php`
+    - Tabel `percakapan` (id, outlet_id FK, konsumen_id FK, dibuat_pada)
+    - Tabel `pesan` (id, percakapan_id FK, pengirim_type, pengirim_id, isi_pesan, dikirim_pada, dibaca_pada)
+  - Model: `app/Models/Chat/Percakapan.php` — relasi outlet, konsumen, pesan, pesanTerakhir, belumDibacaOutlet
+  - Model: `app/Models/Chat/Pesan.php` — method `tandaiDibaca()`
+  - Controller: `app/Http/Controllers/Warung/ChatWebController.php` — index, show, kirim
+  - View: `resources/views/warung/chat.blade.php` — inbox kiri + panel percakapan kanan
+  - `php artisan migrate` — tabel chat berhasil dibuat
+- [x] **Bottom nav warung:** ganti "Profil" → "Chat" (Beranda | Order | POS | Produk | Chat)
+- [x] **Fix `nama_produk` di dashboard:** kolom `produk_nama` → `nama_produk` di query top product
+- [x] **Service Worker:** bump cache version `desahub-pwa-v2` → `desahub-pwa-v3` (force invalidate cache lama)
+
+**Error ditemukan & difix:**
+| # | Error | Penyebab | Solusi | Status |
+|---|-------|----------|--------|--------|
+| 36 | `BindingResolutionException: Target class [ChatWebController] does not exist` | `routes/web.php` menggunakan `ChatWebController::class` tapi **tidak ada `use` statement** di bagian atas file — Laravel resolve sebagai string `"ChatWebController"` tanpa namespace | Tambah `use App\Http\Controllers\Warung\ChatWebController;` di `routes/web.php` | ✅ |
+| 37 | `ParseError: syntax error, unexpected token ")", expecting ":"` di `chat.blade.php:48` | Blade directive ditulis sebagai `{{ endif }}` (PHP echo syntax) bukan `@endif` | Ganti `{{ endif }}` → `@endif` | ✅ |
+| 38 | Error #36 sempat dikira masalah autoloader/cache/stale dev server | Proses investigasi panjang: cek classmap, kill server, `optimize:clear`, restart — semua tidak membantu karena akar masalah ada di `routes/web.php` (missing `use`), bukan di autoloader | Setelah baca `routes/web.php` dengan teliti, ditemukan `use` statement hilang | ✅ |
+
+**File baru/diubah:**
+- `database/migrations/2026_07_11_000004_create_chat_tables.php` (baru)
+- `app/Models/Chat/Percakapan.php` (baru)
+- `app/Models/Chat/Pesan.php` (baru)
+- `app/Http/Controllers/Warung/ChatWebController.php` (baru)
+- `resources/views/warung/chat.blade.php` (baru)
+- `routes/web.php` — tambah `use ChatWebController` + 3 route chat
+- `resources/views/layouts/warung.blade.php` — bottom nav Profil → Chat
+- `resources/views/warung/dashboard.blade.php` — fix kolom `nama_produk`
+- `public/sw.js` — bump cache version v2 → v3
+
+**Pelajaran:**
+> Saat `BindingResolutionException: Target class [X] does not exist` muncul, **cek dulu `use` statement di `routes/web.php`** sebelum investigasi autoloader/cache. Laravel tidak otomatis resolve class tanpa namespace jika `use` statement tidak ada.
+
+**Catatan:**
+- `GET /` → HTTP 200 OK ✅
+- `GET /warung/chat` → HTTP 302 (redirect ke login, benar untuk user belum login) ✅
+- `php artisan route:list --path=warung/chat` → `Warung\ChatWebController@index` ✅
+
 ### [2026-07-11] [Komputer: Laptop 1] — ✅ Sesi 21 — Push to GitHub
 
 **Aktivitas:**

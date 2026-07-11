@@ -10,7 +10,7 @@ Platform ini generik multi-vertikal (Warung sebagai vertikal pertama; Apotik, Wa
 3. Bawa ID, bukan objek relasi bersarang
 4. Setiap Event baru WAJIB ditambahkan ke tabel di bawah sebelum dipakai
 5. Payload tidak boleh berasumsi bentuk produk spesifik satu vertikal — pakai `sellable_type` + `sellable_id` (polymorphic), bukan `produk_id` yang mengasumsikan tabel produk tunggal
-6. Harga dalam payload event (`harga_satuan`, dst) selalu berupa nilai HASIL RESOLUSI dari `Sellable::getHarga(qty)` pada saat transaksi terjadi — bukan referensi harga yang perlu dihitung ulang oleh Listener. Ini penting untuk vertikal berharga bertingkat (mis. Warung Grosir).
+6. Harga DAN nama item dalam payload event (`harga_satuan`, `nama_produk`, dst) selalu berupa nilai SNAPSHOT hasil resolusi `Sellable::getHarga(qty)`/`getNama()` pada saat transaksi terjadi — bukan referensi yang di-JOIN ulang oleh Listener/laporan nanti. Ini penting untuk vertikal berharga bertingkat (mis. Warung Grosir) DAN supaya riwayat order tidak berubah kalau nama/harga produk diedit belakangan (ditemukan sebagai bug nyata: laporan Top Produk gagal karena kolom nama produk tidak pernah disnapshot — lihat project.md).
 
 ---
 
@@ -28,7 +28,7 @@ Platform ini generik multi-vertikal (Warung sebagai vertikal pertama; Apotik, Wa
   | buyer_id | int, nullable | null kalau buyer_type=Umum |
   | jenis_transaksi | string | `online` \| `pos` |
   | metode_pengiriman | string, nullable | `diantar_kurir` \| `ambil_sendiri`, null kalau jenis_transaksi=pos |
-  | items | array | `[{sellable_type, sellable_id, qty, harga_satuan}]` |
+  | items | array | `[{sellable_type, sellable_id, nama_produk, qty, harga_satuan}]` — `nama_produk` snapshot, WAJIB diisi saat order dibuat, JANGAN di-JOIN ulang ke tabel produk saat menampilkan riwayat |
   | total_harga | decimal | |
   | metode_pembayaran | string | `cod` \| `transfer` \| `dp` \| `tunai_pos` |
   | dibuat_pada | datetime | |

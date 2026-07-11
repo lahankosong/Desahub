@@ -183,6 +183,7 @@
                                     style="background-color: var(--warna-aksen-utama); color: #fff; border: none; font-size: 0.75rem;">
                                 <i class="bi bi-crosshair me-1"></i> Ambil Lokasi Saat Ini
                             </button>
+                            <div id="gps-status-msg" class="mt-2 small" style="display: none;"></div>
                         </div>
 
                         <div class="row g-2 mb-3">
@@ -243,6 +244,84 @@
                             <label class="form-label fw-semibold" style="font-size: 0.85rem;">Alamat</label>
                             <textarea name="alamat" class="form-control" rows="2" placeholder="Jl. Melati No. 5, Desa Sukamaju" required
                                       style="border-color: var(--warna-netral-garis); background: #fff;"></textarea>
+                        </div>
+
+                        {{-- Alamat Terstruktur (cascading dropdown dari database wilayah) --}}
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label fw-semibold" style="font-size: 0.85rem;">Provinsi</label>
+                                <select name="provinsi" id="provinsi-select" class="form-select"
+                                        style="border-color: var(--warna-netral-garis); background: #fff;">
+                                    <option value="">Pilih Provinsi...</option>
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fw-semibold" style="font-size: 0.85rem;">Kabupaten/Kota</label>
+                                <select name="kabupaten" id="kabupaten-select" class="form-select"
+                                        style="border-color: var(--warna-netral-garis); background: #fff;">
+                                    <option value="">Pilih Kab/Kota...</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label fw-semibold" style="font-size: 0.85rem;">Kecamatan</label>
+                                <select name="kecamatan" id="kecamatan-select" class="form-select"
+                                        style="border-color: var(--warna-netral-garis); background: #fff;">
+                                    <option value="">Pilih Kecamatan...</option>
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fw-semibold" style="font-size: 0.85rem;">Desa/Kelurahan</label>
+                                <select name="desa_kelurahan" id="desa-select" class="form-select"
+                                        style="border-color: var(--warna-netral-garis); background: #fff;">
+                                    <option value="">Pilih Desa...</option>
+                                </select>
+                            </div>
+                        </div>
+                        {{-- Hidden inputs untuk nama wilayah (dikirim ke server) --}}
+                        <input type="hidden" name="provinsi_nama" id="provinsi-nama" value="">
+                        <input type="hidden" name="kabupaten_nama" id="kabupaten-nama" value="">
+                        <input type="hidden" name="kecamatan_nama" id="kecamatan-nama" value="">
+                        <input type="hidden" name="desa_kelurahan_nama" id="desa-nama" value="">
+                        <div class="row g-2 mb-3">
+                            <div class="col-3">
+                                <label class="form-label fw-semibold" style="font-size: 0.85rem;">RT</label>
+                                <input type="text" name="rt" class="form-control"
+                                       style="border-color: var(--warna-netral-garis); background: #fff;">
+                            </div>
+                            <div class="col-3">
+                                <label class="form-label fw-semibold" style="font-size: 0.85rem;">RW</label>
+                                <input type="text" name="rw" class="form-control"
+                                       style="border-color: var(--warna-netral-garis); background: #fff;">
+                            </div>
+                            <div class="col-3">
+                                <label class="form-label fw-semibold" style="font-size: 0.85rem;">Kode Pos</label>
+                                <input type="text" name="kode_pos" class="form-control"
+                                       style="border-color: var(--warna-netral-garis); background: #fff;">
+                            </div>
+                        </div>
+
+                        {{-- GPS --}}
+                        <div class="mb-3 p-3 rounded-3" style="background-color: rgba(232,162,60,0.05);">
+                            <small class="text-muted mb-2 d-block"><i class="bi bi-geo-alt me-1"></i> Koordinat GPS</small>
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <label class="form-label fw-semibold" style="font-size: 0.8rem;">Latitude</label>
+                                    <input type="number" step="any" name="lat" class="form-control"
+                                           placeholder="-7.250445" style="border-color: var(--warna-netral-garis); background: #fff; font-family: var(--font-judul);">
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label fw-semibold" style="font-size: 0.8rem;">Longitude</label>
+                                    <input type="number" step="any" name="lng" class="form-control"
+                                           placeholder="112.768845" style="border-color: var(--warna-netral-garis); background: #fff; font-family: var(--font-judul);">
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-sm rounded-pill mt-2" onclick="getCurrentLocation()"
+                                    style="background-color: var(--warna-aksen-utama); color: #fff; border: none; font-size: 0.75rem;">
+                                <i class="bi bi-crosshair me-1"></i> Ambil Lokasi Saat Ini
+                            </button>
+                            <div id="gps-status-msg" class="mt-2 small" style="display: none;"></div>
                         </div>
 
                         <div class="row g-2 mb-3">
@@ -405,18 +484,126 @@ document.addEventListener('DOMContentLoaded', function() {
     loadProvinsi();
 });
 
-// ===== GPS Geolocation =====
+// ===== GPS Geolocation + Auto-isi Alamat =====
+function tampilkanStatusGPS(pesan, jenis = 'info') {
+    const el = document.getElementById('gps-status-msg');
+    if (!el) return;
+    const warna = { info: 'var(--warna-aksen-kedua)', warning: 'var(--warna-peringatan)' };
+    el.style.display = 'block';
+    el.style.color = warna[jenis] || warna.info;
+    el.innerHTML = '<i class="bi bi-info-circle me-1"></i> ' + pesan;
+}
+
+function normalisasiNamaWilayah(s) {
+    return (s || '').toUpperCase()
+        .replace(/^(KABUPATEN|KOTA|KECAMATAN|KEC\.|DESA|KELURAHAN|KEL\.)\s+/, '')
+        .trim();
+}
+
+function cariNamaCocok(selectEl, targetRaw) {
+    if (!targetRaw || !selectEl) return null;
+    const target = normalisasiNamaWilayah(targetRaw);
+    if (!target) return null;
+    for (const opt of selectEl.options) {
+        if (!opt.value) continue;
+        const optNama = normalisasiNamaWilayah(opt.value);
+        if (optNama === target || optNama.includes(target) || target.includes(optNama)) {
+            return opt.value;
+        }
+    }
+    return null;
+}
+
+async function isiAlamatDariGPS(lat, lng) {
+    tampilkanStatusGPS('Mencari nama wilayah dari koordinat...');
+    try {
+        const resp = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1&accept-language=id`,
+            { headers: { 'Accept': 'application/json' } }
+        );
+        if (!resp.ok) throw new Error('Gagal reverse geocode');
+        const data = await resp.json();
+        const addr = data.address || {};
+
+        // Isi alamat lengkap kalau kolom masih kosong (tidak menimpa isian manual yang sudah ada)
+        const alamatField = document.querySelector('textarea[name="alamat"]');
+        if (alamatField && !alamatField.value.trim() && data.display_name) {
+            alamatField.value = data.display_name;
+        }
+
+        // Cocokkan bertahap ke dropdown wilayah yang sudah ada (provinsi -> kabupaten -> kecamatan -> desa)
+        const provSel = document.getElementById('provinsi-select');
+        const provNama = cariNamaCocok(provSel, addr.state);
+        let levelTercapai = 0;
+
+        if (provNama) {
+            provSel.value = provNama;
+            document.getElementById('provinsi-nama').value = provNama;
+            levelTercapai = 1;
+            await loadKabupaten(provNama);
+
+            const kabSel = document.getElementById('kabupaten-select');
+            const kabNama = cariNamaCocok(kabSel, addr.county || addr.city || addr.regency);
+            if (kabNama) {
+                kabSel.value = kabNama;
+                document.getElementById('kabupaten-nama').value = kabNama;
+                levelTercapai = 2;
+                await loadKecamatan(kabNama);
+
+                const kecSel = document.getElementById('kecamatan-select');
+                const kecNama = cariNamaCocok(kecSel, addr.suburb || addr.city_district || addr.district);
+                if (kecNama) {
+                    kecSel.value = kecNama;
+                    document.getElementById('kecamatan-nama').value = kecNama;
+                    levelTercapai = 3;
+                    await loadDesa(kecNama);
+
+                    const desaSel = document.getElementById('desa-select');
+                    const desaNama = cariNamaCocok(desaSel, addr.village || addr.hamlet);
+                    if (desaNama) {
+                        desaSel.value = desaNama;
+                        document.getElementById('desa-nama').value = desaNama;
+                        levelTercapai = 4;
+                    }
+                }
+            }
+        }
+
+        const kodePosField = document.querySelector('input[name="kode_pos"]');
+        if (kodePosField && !kodePosField.value && addr.postcode) {
+            kodePosField.value = addr.postcode;
+        }
+
+        if (levelTercapai === 4) {
+            tampilkanStatusGPS('Alamat terisi otomatis dari GPS. Periksa & sesuaikan kalau perlu.');
+        } else if (levelTercapai > 0) {
+            tampilkanStatusGPS('Sebagian wilayah terisi otomatis — lengkapi sisanya secara manual (data desa/kecamatan tidak selalu cocok persis).', 'warning');
+        } else {
+            tampilkanStatusGPS('Koordinat berhasil diambil, tapi nama wilayah tidak terdeteksi otomatis — silakan pilih manual.', 'warning');
+        }
+    } catch (e) {
+        console.error(e);
+        tampilkanStatusGPS('Koordinat berhasil diambil, tapi pengisian alamat otomatis gagal (cek koneksi internet). Silakan pilih wilayah manual.', 'warning');
+    }
+}
+
 function getCurrentLocation() {
     if (!navigator.geolocation) {
         alert('Geolokasi tidak didukung browser ini.');
         return;
     }
+    tampilkanStatusGPS('Mengambil lokasi...');
     navigator.geolocation.getCurrentPosition(
         (pos) => {
-            document.querySelector('input[name="lat"]').value = pos.coords.latitude.toFixed(7);
-            document.querySelector('input[name="lng"]').value = pos.coords.longitude.toFixed(7);
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            document.querySelector('input[name="lat"]').value = lat.toFixed(7);
+            document.querySelector('input[name="lng"]').value = lng.toFixed(7);
+            isiAlamatDariGPS(lat, lng);
         },
-        (err) => alert('Gagal mengambil lokasi: ' + err.message),
+        (err) => {
+            tampilkanStatusGPS('Gagal mengambil lokasi: ' + err.message, 'warning');
+        },
         { enableHighAccuracy: true, timeout: 10000 }
     );
 }

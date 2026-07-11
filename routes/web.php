@@ -10,6 +10,8 @@ use App\Http\Controllers\Konsumen\OutletController;
 use App\Http\Controllers\Konsumen\CheckoutController;
 use App\Http\Controllers\Kurir\KurirWebController;
 use App\Http\Controllers\Warung\ReportController;
+use App\Http\Controllers\Warung\ChatWebController;
+use App\Http\Controllers\Warung\PosController;
 use Modules\Core\app\Traits\HasKetersediaanLog;
 use Modules\Outlet\app\Models\Outlet;
 use Modules\Warung\app\Models\Produk;
@@ -93,6 +95,7 @@ Route::middleware('auth')->group(function () {
                 'nama'        => $p->nama,
                 'harga'       => (float) $p->harga,
                 'satuan'      => $p->satuan,
+                'barcode'     => $p->barcode ?? '',
                 'stok'        => HasKetersediaanLog::getKetersediaanCache(Produk::class, $p->id),
                 'tersedia'    => HasKetersediaanLog::getKetersediaanCache(Produk::class, $p->id) > 0,
             ];
@@ -101,6 +104,12 @@ Route::middleware('auth')->group(function () {
         return view('warung.pos', ['produkList' => $produkList]);
     })->name('warung.pos');
     Route::post('/warung/pos/transaksi', [ProdukWebController::class, 'posTransaksi'])->name('warung.pos.transaksi');
+    // Pelanggan Warung — buku pelanggan milik warung sendiri
+    Route::get('/warung/pos/pelanggan', [PosController::class, 'daftarPelanggan'])->name('warung.pos.pelanggan');
+    Route::post('/warung/pos/pelanggan', [PosController::class, 'tambahPelanggan'])->name('warung.pos.pelanggan.tambah');
+    // Piutang — transaksi tempo warung
+    Route::get('/warung/pos/piutang', [PosController::class, 'daftarPiutang'])->name('warung.pos.piutang');
+    Route::post('/warung/pos/piutang/{id}/bayar', [PosController::class, 'bayarPiutang'])->name('warung.pos.piutang.bayar');
     Route::get('/warung/kelola-produk', function () {
         $outlet = Outlet::where('owner_user_id', Auth::id())->first();
         $produk = $outlet
@@ -135,6 +144,11 @@ Route::middleware('auth')->group(function () {
     Route::post('/warung/profil/outlet', [ProfilWebController::class, 'saveOutlet'])->name('warung.profil.outlet');
     Route::get('/warung/verifikasi', [ProfilWebController::class, 'verifikasi'])->name('warung.verifikasi');
     Route::post('/warung/verifikasi', [ProfilWebController::class, 'submitVerifikasi'])->name('warung.verifikasi.submit');
+
+    // Chat Konsumen-Outlet (Sesi 15)
+    Route::get('/warung/chat', [ChatWebController::class, 'index'])->name('warung.chat');
+    Route::get('/warung/chat/{id}', [ChatWebController::class, 'show'])->name('warung.chat.show');
+    Route::post('/warung/chat/{id}/kirim', [ChatWebController::class, 'kirim'])->name('warung.chat.kirim');
 
     // Konsumen
     Route::get('/konsumen', [OutletController::class, 'index'])->name('konsumen.dashboard');

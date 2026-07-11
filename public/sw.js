@@ -1,7 +1,7 @@
 // Service Worker — Desahub PWA (App Shell Caching)
 // Scope ditentukan per-role via registration di layout masing-masing
 
-const CACHE_NAME = 'desahub-pwa-v2';
+const CACHE_NAME = 'desahub-pwa-v3';
 const ASSETS_TO_CACHE = [
     '/',
     // File spesifik ditambahkan setelah `npm run build` nanti

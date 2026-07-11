@@ -115,7 +115,7 @@ class ProdukWebController extends Controller
 
     /**
      * Transaksi POS — POST /warung/pos/transaksi
-     * Buat order POS (walk-in, buyer_type=Umum, langsung selesai).
+     * Buat order POS: cash (buyer_type=Umum, selesai) atau tempo (buyer_type=PelangganWarung, piutang).
      */
     public function posTransaksi(Request $request)
     {
@@ -125,6 +125,10 @@ class ProdukWebController extends Controller
             'items.*.qty' => 'required|integer|min:1',
             'items.*.harga_satuan' => 'required|numeric|min:0',
             'total' => 'required|numeric|min:0',
+            'metode' => 'required|in:cash,tempo',
+            'pelanggan_id' => 'nullable|integer|exists:pelanggan_warung,id',
+            'jatuh_tempo' => 'nullable|date|after_or_equal:today',
+            'catatan_tempo' => 'nullable|string|max:500',
         ]);
 
         $outlet = Outlet::where('owner_user_id', Auth::id())->first();
@@ -144,16 +148,26 @@ class ProdukWebController extends Controller
             }
         }
 
+        $isTempo = ($valid['metode'] === 'tempo');
+        $buyerType = $isTempo ? 'PelangganWarung' : 'Umum';
+        $buyerId = $isTempo ? ($valid['pelanggan_id'] ?? null) : null;
+        $metodePembayaran = $isTempo ? 'tempo' : 'tunai_pos';
+        $status = $isTempo ? 'selesai' : 'selesai'; // POS selalu selesai
+
+        if ($isTempo && !$buyerId) {
+            return response()->json(['success' => false, 'message' => 'Pilih pelanggan untuk transaksi tempo'], 422);
+        }
+
         // Buat order POS
         $order = \Modules\Order\app\Models\Order::create([
             'outlet_id' => $outlet->id,
-            'buyer_type' => 'Umum',
-            'buyer_id' => null,
+            'buyer_type' => $buyerType,
+            'buyer_id' => $buyerId,
             'total_harga' => $valid['total'],
-            'metode_pembayaran' => 'tunai_pos',
+            'metode_pembayaran' => $metodePembayaran,
             'metode_pengiriman' => null,
             'jenis_transaksi' => 'pos',
-            'status' => 'selesai',
+            'status' => $status,
             'dibuat_pada' => now(),
         ]);
 
@@ -167,7 +181,7 @@ class ProdukWebController extends Controller
                 'sellable_id' => $produk->id,
                 'qty' => $item['qty'],
                 'harga_satuan' => $item['harga_satuan'],
-                'produk_nama' => $produk->nama,
+                'nama_produk' => $produk->nama,
             ]);
 
             // Kurangi stok atomik
@@ -178,11 +192,32 @@ class ProdukWebController extends Controller
             );
         }
 
+        // Jika tempo, buat piutang
+        $piutang = null;
+        if ($isTempo) {
+            $jatuhTempo = $valid['jatuh_tempo'] ?? now()->addDays(7)->toDateString();
+            $piutang = \Modules\Warung\app\Models\Piutang::create([
+                'outlet_id' => $outlet->id,
+                'pelanggan_warung_id' => $buyerId,
+                'order_id' => $order->id,
+                'jumlah' => $valid['total'],
+                'terbayar' => 0,
+                'jatuh_tempo' => $jatuhTempo,
+                'status' => 'aktif',
+                'catatan' => $valid['catatan_tempo'] ?? null,
+            ]);
+        }
+
         // Emit events
         \Modules\Order\app\Events\OrderDibuat::dispatch($order);
-        \Modules\Payment\app\Events\PembayaranDiterima::dispatch($order, 'tunai_pos', $valid['total'], 'lunas');
+        \Modules\Payment\app\Events\PembayaranDiterima::dispatch($order, $metodePembayaran, $valid['total'], $isTempo ? 'tempo' : 'lunas');
 
-        return response()->json(['success' => true, 'order_id' => $order->id]);
+        return response()->json([
+            'success' => true,
+            'order_id' => $order->id,
+            'piutang' => $piutang,
+            'metode' => $valid['metode'],
+        ]);
     }
 
     /**
@@ -197,6 +232,7 @@ class ProdukWebController extends Controller
             return response()->json([
                 'found'      => true,
                 'source'     => 'local',
+                'id'         => $produk->id,
                 'nama'       => $produk->nama,
                 'deskripsi'  => $produk->deskripsi,
                 'harga'      => $produk->harga,

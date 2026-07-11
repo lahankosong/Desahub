@@ -90,18 +90,18 @@
                 @php
                     $topProduk = null;
                     if ($outlet) {
-                        $topProduk = \Modules\Order\app\Models\OrderItem::select('produk_nama', \Illuminate\Support\Facades\DB::raw('SUM(qty) as total_qty'))
+                        $topProduk = \Modules\Order\app\Models\OrderItem::select('nama_produk', \Illuminate\Support\Facades\DB::raw('SUM(qty) as total_qty'))
                             ->whereHas('order', function($q) use ($outlet) {
                                 $q->where('outlet_id', $outlet->id)->whereIn('status', ['selesai', 'diantar', 'diambil_kurir']);
                             })
-                            ->groupBy('produk_nama')
+                            ->groupBy('nama_produk')
                             ->orderBy('total_qty', 'desc')
                             ->first();
                     }
                 @endphp
                 @if ($topProduk)
                     <div class="text-center py-3">
-                        <div class="fw-bold mb-1" style="font-size: 0.85rem;">{{ $topProduk->produk_nama }}</div>
+                        <div class="fw-bold mb-1" style="font-size: 0.85rem;">{{ $topProduk->nama_produk }}</div>
                         <small class="text-muted">{{ $topProduk->total_qty }}x terjual</small>
                     </div>
                 @else

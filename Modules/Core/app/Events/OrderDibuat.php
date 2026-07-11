@@ -24,7 +24,7 @@ class OrderDibuat
      * @param int $outletId Outlet penjual (generik, berlaku semua vertikal)
      * @param string $buyerType 'Konsumen' | 'Outlet' (polymorphic)
      * @param int $buyerId
-     * @param array $items [{sellable_type, sellable_id, qty, harga_satuan}]
+     * @param array $items [{sellable_type, sellable_id, nama_produk, qty, harga_satuan}] — nama_produk snapshot, tidak boleh di-JOIN ulang
      * @param float $totalHarga
      * @param string $metodePembayaran 'cod' | 'transfer' | 'dp'
      * @param string $dibuatPada datetime

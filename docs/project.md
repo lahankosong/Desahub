@@ -286,6 +286,18 @@ Urutan hierarki: Provinsi → Kabupaten/Kota → Kecamatan → Desa/Kelurahan �
 
 GPS wajib untuk pencarian radius — warung tanpa GPS tidak muncul di hasil pencarian radius.
 
+### 8. Snapshot Nama Produk di `order_items` (bug ditemukan Sesi 16, dari log error `produk_nama` tidak ditemukan)
+`order_items` cuma menyimpan referensi polymorphic (`sellable_type`+`sellable_id`) sesuai desain kontrak `Sellable` — TIDAK ada kolom nama produk. Ini menyebabkan laporan "Top Produk"/riwayat order gagal saat mencoba query kolom `produk_nama` yang memang tidak pernah ada.
+
+**Perbaikan (konsisten dengan pola `harga_satuan` yang SUDAH snapshot):**
+```sql
+ALTER TABLE order_items ADD COLUMN nama_produk VARCHAR(255) NOT NULL AFTER sellable_id;
+```
+- Diisi via layanan `BuatOrder` saat item ditambahkan ke order — ambil dari `Sellable::getNama()` SAAT ITU JUGA, sama seperti `harga_satuan` diambil dari `getHarga(qty)` saat itu juga.
+- **Kenapa snapshot, bukan JOIN ke `warung_produk` saat baca:** kalau nama produk diedit/dihapus warung belakangan, riwayat order lama HARUS tetap menampilkan nama sesuai kondisi saat transaksi terjadi — sama alasannya dengan kenapa harga di-snapshot, bukan re-lookup.
+- Laporan Top Produk (Warung & Konsumen) cukup `GROUP BY nama_produk` dari `order_items`, tidak perlu JOIN ke tabel produk asal sama sekali.
+- **Data lama (order_items yang sudah ada sebelum migration ini) tidak punya nilai — perlu backfill manual** (JOIN satu kali ke `warung_produk` berdasarkan `sellable_id` untuk isi kolom baru, HANYA untuk data historis yang sudah ada; setelahnya kolom ini selalu diisi otomatis oleh `BuatOrder`).
+
 ### 9. Pencarian Radius (Konsumen)
 - **Default radius 1km** — menggunakan GPS dari profil konsumen (`konsumen_profiles.lat/lng`)
 - **Radius slider** — 1-50km, geser −/+
@@ -302,6 +314,34 @@ Tabel `warung_produk` punya kolom `harga_beli` (nullable decimal). View Warung m
 Draf lengkap ada di `syarat_ketentuan.md`. Prinsip inti: Platform belum menerapkan skema bisnis/keuntungan, sehingga seluruh aktivitas dan transaksi tiap peran (Outlet, Konsumen, Kurir, Sales, Distributor) menjadi tanggung jawab masing-masing pengguna. Kewajiban Platform dibatasi pada perlindungan data pengguna lewat enkripsi.
 
 **Perlu diingat:** draf ini belum direview secara hukum — ada kewajiban dari UU Pelindungan Data Pribadi (UU 27/2022) yang kemungkinan lebih luas dari sekadar enkripsi (lihat catatan lengkap di `syarat_ketentuan.md`).
+
+---
+
+## Fitur Chat Konsumen–Outlet (baru, Sesi 15)
+
+**Kebutuhan:** Warung perlu bisa dihubungi konsumen yang bertanya (sebelum atau saat order). Sebelumnya CRM Rules di `aturan_bisnis.md` menyebut "Chat" sekilas tanpa desain detail — ini pertama kali dirancang konkret.
+
+**Keputusan desain:**
+- **Scope: inbox per pasangan Konsumen–Outlet**, bukan per-order. Alasan: pertanyaan sering muncul SEBELUM order dibuat (mis. "ready gak barangnya?"), jadi mengikat chat ke `order_id` akan memaksa ada order dulu sebelum bisa tanya — tidak realistis.
+- **Bukan real-time** — konsisten dengan batasan Livewire yang sudah disepakati (butuh koneksi server, tidak ada websocket). Pesan baru muncul lewat refresh/polling ringan (interval beberapa detik), bukan push instan.
+- **Notifikasi pesan masuk** memakai jalur yang sama dengan Notification Rules yang sudah direncanakan (Fase 1.5) — bukan sistem notifikasi terpisah.
+
+**Skema data:**
+```
+percakapan
+  id, outlet_id (FK), konsumen_id (FK users), dibuat_pada
+
+pesan
+  id, percakapan_id (FK), pengirim_type (Konsumen|Outlet), pengirim_id,
+  isi_pesan, dibaca_pada (nullable), dikirim_pada
+```
+
+**Event baru:** `PesanDikirim`
+- Dipancarkan Modul Chat saat pesan baru dikirim (dari Konsumen atau Outlet)
+- Payload: `percakapan_id`, `pengirim_type`, `pengirim_id`, `isi_pesan`, `dikirim_pada`
+- Listener: notifikasi ke pihak lawan bicara (masuk daftar notifikasi dashboard)
+
+**Modul:** `Modules/Chat` (baru) — Fase 1.5, konsisten dengan timeline CRM Rules yang sudah ada di roadmap.
 
 ---
 

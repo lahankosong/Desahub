@@ -107,6 +107,7 @@ class OrderController extends Controller
                 $orderItems[] = [
                     'sellable_type' => $sellableClass,
                     'sellable_id'   => $item['sellable_id'],
+                    'nama_produk'   => $sellable->getNama(),
                     'qty'            => $item['qty'],
                     'harga_satuan'   => $hargaSatuan,
                 ];

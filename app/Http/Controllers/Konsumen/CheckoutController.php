@@ -83,6 +83,7 @@ class CheckoutController extends Controller
                 'order_id'      => $order->id,
                 'sellable_type' => Produk::class,
                 'sellable_id'   => $produk->id,
+                'nama_produk'   => $produk->nama,
                 'qty'           => $qty,
                 'harga_satuan'  => $hargaSatuan,
             ]);

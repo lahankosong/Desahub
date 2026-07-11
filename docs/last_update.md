@@ -1,5 +1,109 @@
 # Last Update — Ekosistem Warung
 
+## Sesi 17 — Fix produk_nama + Modul Chat Warung (11 Juli 2026)
+
+### Konteks
+Lanjutan Sesi 16 (bug `produk_nama` tidak ditemukan). User minta: (1) selesaikan fix error `produk_nama`, (2) hapus menu Profil di bottom nav warung, ganti dengan menu Chat untuk komunikasi dengan konsumen terkait stok produk dll.
+
+### Fix 1: Error `produk_nama` column not found
+- **Root cause:** query Top Product di `resources/views/warung/dashboard.blade.php` pakai kolom `produk_nama` yang tidak pernah ada — kolom asli (dari Sesi 16) bernama `nama_produk` (snapshot, diisi via `Sellable::getNama()` saat transaksi).
+- **Perbaikan:** 3 occurence di dashboard diubah `produk_nama` → `nama_produk` (select, groupBy, dan akses `$topProduk->nama_produk`).
+- `php artisan view:clear` dijalankan supaya compiled view lama tidak disajikan.
+
+### Fix 2: Bottom Nav Warung — Profil → Chat
+- Di `resources/views/layouts/warung.blade.php`, item bottom nav **Profil dihapus**, diganti **Chat** (`route('warung.chat')`, ikon `bi-chat-dots`).
+- Profil TETAP ada di top-nav dropdown (Pengaturan Profil + Keluar) — tidak dihapus, cuma dipindah dari bottom nav per desain Sesi 15.
+- Bottom nav sekarang: **Beranda | Order | POS (tengah) | Produk | Chat** — persis desain Sesi 15.
+
+### Fitur Baru: Modul Chat Konsumen-Outlet (Sesi 15, baru diimplementasikan)
+Sesi 15 cuma mendesain Chat, belum diimplementasikan. Sekarang dibangun:
+- **Migration** `database/migrations/2026_07_11_000004_create_chat_tables.php`: tabel `percakapan` (outlet_id, konsumen_id, unique pair) + `pesan` (percakapan_id, pengirim_type/id, isi_pesan, dibaca_pada, dikirim_pada).
+- **Model** `app/Models/Chat/Percakapan.php` & `app/Models/Chat/Pesan.php` (relasi + accessor `belumDibacaOutlet`, method `tandaiDibaca()`).
+- **Controller** `app/Http/Controllers/Warung/ChatWebController.php`: inbox (`index`), buka percakapan + tandai baca (`show`), kirim pesan dari Outlet (`kirim`).
+- **Route** `warung.chat`, `warung.chat.show`, `warung.chat.kirim` di `routes/web.php`.
+- **View** `resources/views/warung/chat.blade.php`: layout 2-panel (inbox kiri, panel pesan kanan) dengan badge unread per percakapan.
+- `php artisan migrate` sukses — tabel `percakapan` & `pesan` terbuat.
+
+**Catatan:** Chat dari sisi Konsumen BELUM dibuat (belum ada UI kirim pesan dari app Konsumen ke outlet). Ini cuma sisi Outlet (nerima + membalas). Perlu sesi terpisah untuk sisi Konsumen + event `PesanDikirim` (notifikasi) kalau mau lengkap.
+
+### Status
+- [x] Error `produk_nama` resolved
+- [x] Bottom nav: Profil → Chat
+- [x] Modul Chat sisi Outlet jalan (inbox + balas)
+- [ ] Sisi Konsumen + event PesanDikirim (belum dikerjakan)
+
+## Sesi 23 — Overhaul POS Kasir + PelangganWarung + Piutang (11 Juli 2026)
+
+### Konteks
+POS `/warung/pos` v1 (Sesi 15) hanya basic: grid tap-to-add + bayar tunai. User minta dirombak jadi layaknya sistem kasir sungguhan: scan barcode, qty stepper, cash management, tempo (piutang) dengan pelanggan warung sendiri.
+
+### Keputusan Desain
+
+**PelangganWarung — buku pelanggan MILIK warung sendiri, bukan akun platform:**
+- Tabel `pelanggan_warung`: nama, no_hp, catatan — simpel, tidak perlu registrasi app.
+- Alasan: banyak pelanggan tempo adalah tetangga tanpa smartphone.
+- `buyer_type` baru: `PelangganWarung` (sebelumnya hanya `Konsumen`, `Outlet`, `Umum`).
+
+**Piutang — tabel terpisah dari `cod_settlements`:**
+- `cod_settlements` = urusan uang kurir (COD).
+- `piutang` = urusan piutang warung sendiri: jumlah, terbayar, sisa (stored generated), jatuh_tempo, status (aktif/lunas/gagal_bayar).
+- Terhubung ke notifikasi "Piutang Jatuh Tempo" yang sudah direncanakan di roadmap Notification Rules.
+
+**Scan barcode WAJIB client-side (browser), bukan API call:**
+- Konsisten dengan keputusan POS harus bisa offline (Lapis 3).
+- Client-side data (`produkData` dari render server) dicocokkan dulu.
+- Fallback API server hanya jika barcode tidak ada di data lokal.
+- Hardware scanner: emulasi keyboard (Enter key) → langsung cari.
+- Kamera scanner: BarcodeDetector API (Chrome 88+), real-time detection tanpa sentuh server.
+
+**Tambah pelanggan baru saat tempo: online-only (jarang terjadi):**
+- Pilih pelanggan existing: offline (dari cache localStorage).
+
+### Perubahan Schema
+```sql
+-- pelanggan_warung: buku pelanggan sederhana
+CREATE TABLE pelanggan_warung (
+    id, outlet_id FK, nama, no_hp, catatan, timestamps
+);
+
+-- piutang: terpisah dari cod_settlements
+CREATE TABLE piutang (
+    id, outlet_id FK, pelanggan_warung_id FK, order_id FK nullable,
+    jumlah, terbayar, sisa GENERATED ALWAYS AS (jumlah - terbayar),
+    jatuh_tempo DATE, status ENUM('aktif','lunas','gagal_bayar'),
+    catatan, timestamps
+);
+
+-- orders: buyer_id nullable + enum metode_pembayaran tambah tunai_pos, tempo
+ALTER TABLE orders MODIFY buyer_id BIGINT NULL;
+ALTER TABLE orders MODIFY metode_pembayaran ENUM('cod','transfer','dp','qris','tunai_pos','tempo');
+```
+
+### File baru (7) + diubah (4)
+| File | Deskripsi |
+|------|-----------|
+| `Modules/Warung/database/migrations/...000005_create_pelanggan_warung_table.php` | Tabel pelanggan_warung |
+| `Modules/Warung/database/migrations/...000006_create_piutang_table.php` | Tabel piutang |
+| `Modules/Warung/app/Models/PelangganWarung.php` | Model + totalUtangAktif() |
+| `Modules/Warung/app/Models/Piutang.php` | Model + scopes |
+| `app/Http/Controllers/Warung/PosController.php` | API pelanggan & piutang |
+| `Modules/Order/database/migrations/...000007_add_pos_fields_to_orders.php` | buyer_id nullable + enum |
+| `Modules/Order/database/migrations/...000008_make_nama_produk_nullable.php` | Bug fix #39 |
+| `resources/views/warung/pos.blade.php` | Overhaul total (~1000 baris) |
+| `app/Http/Controllers/Warung/ProdukWebController.php` | posTransaksi() rewrite |
+| `app/Http/Controllers/Konsumen/CheckoutController.php` | Tambah nama_produk |
+| `routes/web.php` | 4 route + barcode di produkList |
+
+### Status
+- [x] Scan barcode client-side (hardware + kamera + manual)
+- [x] Keranjang qty stepper + subtotal + total
+- [x] Cash: input uang diterima + kembalian + quick suggestions
+- [x] Tempo: pilih PelangganWarung + jatuh_tempo + catatan → piutang
+- [x] Offline banner + cache pelanggan
+- [x] `php artisan migrate` sukses
+- [ ] Notifikasi "Piutang Jatuh Tempo" (belum, masih di roadmap)
+- [ ] Riwayat transaksi POS harian (belum)
+
 ## Sesi 1 — Diskusi Arsitektur Awal (9 Juli 2026)
 
 ### Konteks
@@ -347,3 +451,52 @@ Andi upload `project.md` (versi terbaru dari Claude Code, sudah jauh berkembang:
 
 ### Status
 Fondasi arsitektur & desain di sini (last_update.md, project.md, events.md, desain_ui.md, pos.md, versi_pwa.md, syarat_ketentuan.md) sudah cukup sinkron dengan implementasi aktual per 11 Juli 2026. `events.md`, `versi_pwa.md`, `syarat_ketentuan.md` masih berpotensi punya perbedaan lebih lanjut yang belum diverifikasi (belum ada versi terbaru file-file itu yang diupload untuk dibandingkan).
+
+## Sesi 15 — Reorganisasi Navigasi Warung + Fitur Chat Baru (11 Juli 2026)
+
+### Keputusan: Chat Konsumen-Outlet (baru, belum pernah didesain sebelumnya)
+- Scope: inbox per pasangan Konsumen-Outlet (bukan per-order) — supaya pertanyaan pra-order tetap bisa ditanyakan tanpa perlu order dibuat dulu.
+- Bukan real-time, konsisten batasan Livewire — polling ringan, bukan websocket.
+- Skema: tabel `percakapan` (outlet_id, konsumen_id) + `pesan` (percakapan_id, pengirim_type/id, isi_pesan, dibaca_pada).
+- Event baru `PesanDikirim`, modul baru `Modules/Chat` (Fase 1.5, selaras timeline CRM Rules yang sudah ada).
+
+### Keputusan: Reorganisasi navigasi Warung
+- Laporan digabung ke Beranda (bukan tab terpisah lagi) — isi laporan (grafik omzet, top produk) jadi bagian scroll-down Beranda.
+- Produk ditambahkan ke bottom nav (sebelumnya halaman "Kelola Produk" ada tapi tidak di bottom nav).
+- Profil dipindah dari bottom nav ke top nav sebagai dropdown (isi: Pengaturan Profil + Keluar).
+- Top nav tidak lagi tampilkan nama pribadi pemilik — diganti nama outlet/warung (`auth()->user()->outlet?->nama`).
+- Bottom nav baru (5 slot simetris): Beranda | Order | POS (tengah) | Produk | Chat.
+
+### File yang diupdate/dibuat
+- `project.md`: desain lengkap fitur Chat (skema data, event, modul)
+- `desain_ui.md`: top nav baru (nama outlet + dropdown profil), bottom nav baru (5 slot), Dashboard diperluas dengan ringkasan laporan, wireframe halaman Chat baru
+- `warung.blade.php`: kode nav diupdate sesuai desain di atas
+
+### Catatan penting — perlu diverifikasi/ditambahkan di sisi implementasi (Claude Code)
+Karena saya tidak punya akses ke `routes/web.php` dan `User.php` model yang sebenarnya, beberapa hal di kode `warung.blade.php` yang saya buat masih ASUMSI dan perlu dicek:
+1. **Route `warung.produk` dan `warung.chat`** — nama route ini saya asumsikan mengikuti pola yang sudah ada (`warung.dashboard`, `warung.order-masuk`, dst). Perlu dicek/dibuat di `routes/web.php` sesuai nama controller & method yang sebenarnya dipakai (kemungkinan `warung.kelola-produk` sudah ada dengan nama lain).
+2. **Relasi `outlet()` di User model** — kode pakai `auth()->user()->outlet?->nama`. Kalau relasi ini belum ada di `app/Models/User.php`, perlu ditambahkan: `hasOne(\Modules\Outlet\app\Models\Outlet::class, 'owner_user_id')`.
+3. **Variabel `$chatBelumDibaca`** — dipakai untuk badge notifikasi di ikon Chat. Supaya tersedia di semua halaman (bukan cuma yang eksplisit passing variabel ini), disarankan pakai Laravel View Composer, bukan passing manual di tiap controller.
+
+### Status
+Modul `Chat` belum diimplementasikan — ini baru desain awal + reorganisasi nav. Implementasi backend Chat (migration, model, controller, routes) belum dikerjakan.
+
+## Sesi 16 — Debug Error `produk_nama` via Analisis SQL Dump (11 Juli 2026)
+
+### Konteks
+Andi upload `desahub.sql` (dump database aktual) untuk menelusuri error "produk_nama column not found" yang muncul saat kerja di Claude Code.
+
+### Root cause ditemukan
+`order_items` memang TIDAK PERNAH punya kolom nama produk — cuma `sellable_type`+`sellable_id`+`qty`+`harga_satuan` (sesuai desain kontrak `Sellable`, Order tidak boleh tahu isi produk). Nama produk cuma ada di `warung_produk.nama`. Error terjadi karena ada query (kemungkinan untuk fitur Laporan/Top Produk) yang mengasumsikan kolom `produk_nama` ada langsung di `order_items`, padahal tidak pernah dibuat.
+
+### Keputusan: Tambah kolom snapshot `nama_produk`, bukan JOIN
+- **Opsi ditolak:** JOIN `order_items` ke `warung_produk` saat baca — berisiko riwayat order berubah nama kalau produk diedit/dihapus warung belakangan.
+- **Opsi dipilih:** `ALTER TABLE order_items ADD COLUMN nama_produk VARCHAR(255)`, diisi via `BuatOrder` dari `Sellable::getNama()` SAAT transaksi terjadi — pola SAMA PERSIS dengan `harga_satuan` yang sudah snapshot (bukan live-lookup). Konsistensi ini yang jadi alasan utama pemilihan opsi.
+- Data lama (order_items sebelum migration ini) perlu backfill manual sekali (JOIN satu kali ke warung_produk), bukan solusi permanen.
+
+### File yang diupdate
+- `project.md`: bagian baru "8. Snapshot Nama Produk di order_items" di Integritas Transaksi (mengisi celah penomoran yang sebelumnya bolong di 1-10)
+- `events.md`: aturan #6 diperluas eksplisit mencakup nama (bukan cuma harga), payload `OrderDibuat.items` ditambah field `nama_produk`
+
+### Status
+Ini murni temuan bug + rekomendasi perbaikan skema — implementasi migration & update `BuatOrder` service belum dikerjakan, perlu dibawa ke Claude Code.

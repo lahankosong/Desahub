@@ -81,6 +81,21 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         .btn-loading { pointer-events: none; opacity: 0.7; }
+        .profil-dropdown .dropdown-menu { font-family: var(--font-body); }
+        .badge-chat-unread {
+            position: absolute;
+            top: -2px;
+            right: 8px;
+            background-color: var(--warna-peringatan);
+            color: #fff;
+            font-size: 0.6rem;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
     </style>
     @livewireStyles
     <script>
@@ -104,16 +119,34 @@
 <body>
     <x-offline-banner />
 
+    {{-- Top Nav: nama OUTLET (bukan nama pribadi pemilik) + dropdown Profil --}}
     <nav class="navbar navbar-expand-lg navbar-dark bg-danger">
         <div class="container">
-            <a class="navbar-brand" href="/warung">🏪 Derum Warung</a>
+            <a class="navbar-brand" href="{{ route('warung.dashboard') }}">
+                🏪 {{ auth()->user()->outlet?->nama ?? 'Warung Saya' }}
+            </a>
             @auth
-            <div class="ms-auto d-flex align-items-center gap-3">
-                <span class="text-white small">{{ auth()->user()->nama }}</span>
-                <form method="POST" action="/logout" class="d-inline">
-                    @csrf
-                    <button type="submit" class="btn btn-outline-light btn-sm">Keluar</button>
-                </form>
+            <div class="ms-auto dropdown profil-dropdown">
+                <button class="btn btn-outline-light btn-sm dropdown-toggle d-flex align-items-center gap-1"
+                        type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-person-circle"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li>
+                        <a class="dropdown-item" href="{{ route('warung.profil') }}">
+                            <i class="bi bi-gear me-2"></i> Pengaturan Profil
+                        </a>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <form method="POST" action="/logout">
+                            @csrf
+                            <button type="submit" class="dropdown-item text-danger">
+                                <i class="bi bi-box-arrow-right me-2"></i> Keluar
+                            </button>
+                        </form>
+                    </li>
+                </ul>
             </div>
             @endauth
         </div>
@@ -123,7 +156,7 @@
         @yield('content')
     </main>
 
-    {{-- Bottom Navigation --}}
+    {{-- Bottom Navigation: Beranda (gabung Laporan) | Order | POS (tengah) | Produk | Chat --}}
     <nav class="bottom-nav d-flex justify-content-around align-items-center" style="padding-bottom: env(safe-area-inset-bottom);">
         <a href="{{ route('warung.dashboard') }}" class="{{ request()->routeIs('warung.dashboard') ? 'active' : '' }}">
             <i class="bi bi-house-door{{ request()->routeIs('warung.dashboard') ? '-fill' : '' }}"></i>Beranda
@@ -131,19 +164,19 @@
         <a href="{{ route('warung.order-masuk') }}" class="{{ request()->routeIs('warung.order-masuk') ? 'active' : '' }}">
             <i class="bi bi-receipt{{ request()->routeIs('warung.order-masuk') ? '-fill' : '' }}"></i>Order
         </a>
-        
+
         {{-- POS Button (prominent, center) --}}
         <a href="{{ route('warung.pos') }}" class="position-relative" style="text-decoration: none; margin-top: -20px;">
             <div style="width: 56px; height: 56px; border-radius: 50%; background-color: var(--warna-aksen-kedua); color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.2); border: 3px solid #fff;">
                 <i class="bi bi-cart3" style="font-size: 1.5rem;"></i>
             </div>
         </a>
-        
-        <a href="{{ route('warung.laporan') }}" class="{{ request()->routeIs('warung.laporan') ? 'active' : '' }}">
-            <i class="bi bi-graph-up{{ request()->routeIs('warung.laporan') ? '-fill' : '' }}"></i>Laporan
+
+        <a href="{{ route('warung.kelola-produk') }}" class="{{ request()->routeIs('warung.kelola-produk') ? 'active' : '' }}">
+            <i class="bi bi-box-seam{{ request()->routeIs('warung.kelola-produk') ? '-fill' : '' }}"></i>Produk
         </a>
-        <a href="{{ route('warung.profil') }}" class="{{ request()->routeIs('warung.profil') ? 'active' : '' }}">
-            <i class="bi bi-person{{ request()->routeIs('warung.profil') ? '-fill' : '' }}"></i>Profil
+        <a href="{{ route('warung.chat') }}" class="{{ request()->routeIs('warung.chat') ? 'active' : '' }}">
+            <i class="bi bi-chat-dots{{ request()->routeIs('warung.chat') ? '-fill' : '' }}"></i>Chat
         </a>
     </nav>
 
