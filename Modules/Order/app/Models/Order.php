@@ -10,7 +10,8 @@ class Order extends Model
 {
     protected $fillable = [
         'outlet_id', 'buyer_type', 'buyer_id', 'total_harga',
-        'metode_pembayaran', 'status', 'kurir_id',
+        'metode_pembayaran', 'jenis_transaksi', 'metode_pengiriman',
+        'alamat_antar', 'catatan', 'status', 'kurir_id',
         'dibuat_pada', 'diambil_pada', 'diantar_pada',
         'selesai_pada', 'dibatalkan_pada',
     ];
@@ -41,7 +42,7 @@ class Order extends Model
      * State machine transisi yang diizinkan.
      */
     public static array $validTransitions = [
-        'dibuat'         => ['diambil_kurir', 'dibatalkan'],
+        'dibuat'         => ['diambil_kurir', 'selesai', 'dibatalkan'],
         'diambil_kurir'  => ['diantar', 'dibatalkan'],
         'diantar'        => ['selesai', 'gagal_kirim'],
         'gagal_kirim'    => ['dibatalkan'],
@@ -91,9 +92,10 @@ class Order extends Model
         $affected = static::where('id', $orderId)
             ->where('status', 'dibuat')
             ->whereNull('kurir_id')
+            ->where('metode_pengiriman', 'diantar_kurir')
             ->update([
-                'kurir_id' => $kurirId,
-                'status'   => 'diambil_kurir',
+                'kurir_id'    => $kurirId,
+                'status'      => 'diambil_kurir',
                 'diambil_pada' => now(),
             ]);
 
@@ -113,14 +115,14 @@ class Order extends Model
         ])->toArray();
 
         OrderDibuat::dispatch(
-            order_id: $this->id,
-            outlet_id: $this->outlet_id,
-            buyer_type: $this->buyer_type,
-            buyer_id: $this->buyer_id,
-            items: $items,
-            total_harga: $this->total_harga,
-            metode_pembayaran: $this->metode_pembayaran,
-            dibuat_pada: $this->dibuat_pada->toDateTimeString()
+            $this->id,
+            $this->outlet_id,
+            $this->buyer_type,
+            $this->buyer_id,
+            $items,
+            $this->total_harga,
+            $this->metode_pembayaran,
+            $this->dibuat_pada->toDateTimeString()
         );
     }
 
@@ -130,11 +132,11 @@ class Order extends Model
     public function emitOrderDibatalkan(string $dibatalkanOlehType, int $dibatalkanOlehId, string $alasan): void
     {
         OrderDibatalkan::dispatch(
-            order_id: $this->id,
-            dibatalkan_oleh_type: $dibatalkanOlehType,
-            dibatalkan_oleh_id: $dibatalkanOlehId,
-            alasan: $alasan,
-            terjadi_pada: now()->toDateTimeString()
+            $this->id,
+            $dibatalkanOlehType,
+            $dibatalkanOlehId,
+            $alasan,
+            now()->toDateTimeString()
         );
     }
 }

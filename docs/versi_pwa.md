@@ -29,6 +29,7 @@ Livewire bekerja dengan render ulang komponen lewat request ke server — secara
 - Hanya untuk aksi yang benar-benar krusial saat sinyal hilang:
   - Kurir update status antar (`diambil` → `diantar` → `selesai`)
   - Warung toggle ketersediaan produk cepat
+  - **Warung: transaksi POS (walk-in)** — beda dari checkout online Konsumen yang wajib koneksi. Alasan: POS dipakai terus-menerus di kasir sepanjang hari, warung tidak bisa "coba lagi nanti" seperti Konsumen yang checkout dari rumah. Detail desain layar di `pos.md`.
 - Dibangun pakai JS biasa (bukan Livewire call): aksi disimpan ke IndexedDB saat offline, ditandai `pending_sync`, otomatis dikirim ke endpoint API biasa (bukan lewat Livewire) begitu `navigator.onLine` kembali `true`.
 - Endpoint API untuk sinkronisasi ini **konsisten dengan strategi resolusi konflik** yang sudah disepakati di `project.md` — kalau ada 2 update offline yang konflik, berlaku aturan yang sama (additive log untuk ketersediaan, dst).
 

@@ -194,3 +194,156 @@ Semua open question utama sudah terjawab. Fondasi arsitektur (project.md + event
 
 ### Status
 Fondasi arsitektur + integritas transaksi + kerangka legal dasar sudah tercatat. Siap untuk mulai implementasi modul pertama.
+
+## Sesi 9 — Pivot ke Versi Uji Coba PWA (9 Juli 2026)
+
+### Konteks
+Andi kesulitan mengembangkan frontend Flutter. Diputuskan membangun versi uji coba PWA berbasis Laravel dulu (memanfaatkan skill yang sudah terbukti di EMINOR & Margonoandi Fanbase), Flutter tetap opsi jangka panjang.
+
+### Keputusan: Stack & prinsip
+- Stack: Blade + Livewire + Alpine.js (dipilih karena paling ringan, konsisten skill Laravel yang sudah dikuasai).
+- Prinsip: PWA murni ganti lapisan presentasi. Semua desain backend (Modules/Core dkk, kontrak Sellable/BuyerEligibilityPolicy/ComplianceReportable, event, state machine Order) TIDAK berubah.
+
+### Gesekan teknis yang diluruskan: Livewire vs offline
+- Livewire secara arsitektur butuh koneksi (render ulang lewat request server) — tidak bisa dipaksa 100% offline tanpa ganti arsitektur total.
+- Andi tetap minta offline dasar sejak awal (bukan ditunda). Solusi kompromi: Arsitektur Offline 3 Lapis:
+  1. App Shell Caching (Service Worker) — app tetap terbuka walau offline, bukan error browser
+  2. Data terakhir terlihat (read-only cache via localStorage/IndexedDB + Alpine)
+  3. Antrian aksi kritis (write queue, terpisah dari Livewire, pakai JS biasa) — HANYA untuk Kurir update status antar & Warung toggle ketersediaan, disinkron otomatis saat online kembali
+- Checkout, registrasi, pencarian radius, approval Sales TETAP wajib online (masuk akal karena butuh validasi server real-time).
+
+### Keputusan: Struktur multi-role dalam 1 app Laravel
+- Beda dari rencana 3 app Flutter terpisah — 1 aplikasi Laravel, dibedakan route prefix (/warung, /konsumen, /kurir), masing-masing punya manifest.json & scope Service Worker sendiri supaya tetap bisa di-install terpisah sebagai ikon HP.
+
+### File yang dibuat
+- `versi_pwa.md` (baru): stack, arsitektur offline 3 lapis, struktur folder, alur pengembangan bertahap 7 tahap mengikuti scope MVP yang sudah disepakati sebelumnya
+
+### Status
+Scaffolding `Modules/Core` (backend) tetap dilanjutkan seperti rencana — PWA ini konsumen dari kontrak/Event yang sama. Kalau Flutter dilanjutkan nanti setelah PWA tervalidasi, backend tidak perlu diubah.
+
+## Sesi 10 — Sinkronisasi Progres Implementasi & Checkpoint Transisi Flutter->PWA (10 Juli 2026)
+
+### Konteks
+Andi upload `activity.md` dan `cara_akses.md` dari sesi Claude Code (implementasi nyata di repo `github.com/lahankosong/Desahub`, lokal via XAMPP). Progres ditemukan sudah jauh lebih maju dari terakhir dibahas di sini.
+
+### Progres implementasi aktual (per 10 Juli 2026, dari activity.md)
+- `Modules/Core` SELESAI: 3 kontrak (Sellable, ComplianceReportable, BuyerEligibilityPolicy), trait log ketersediaan, helper radius, 4 Event DTO (KetersediaanBerubah, OrderDibuat, PembayaranDiterima, OrderDibatalkan) — konsisten dengan desain di project.md/events.md.
+- `Modules/Auth` SELESAI: User model + Sanctum, OutletProfile/KonsumenProfile/KurirProfile, AuthController (register/login/verify-otp/me/logout), routes prefix `/api/v1`.
+- Database `desahub` dibuat, 10 tabel (users, personal_access_tokens, outlet_profiles, konsumen_profiles, kurir_profiles, ketersediaan_cache, ketersediaan_movements, cache, jobs, sessions), migrate:fresh sukses.
+- Ditemukan ketidaksesuaian: `cara_akses.md` masih berisi panduan lengkap 3 app Flutter (app_konsumen/app_kurir/app_outlet), padahal sesi terakhir di sini sudah sepakat pivot ke PWA.
+
+### Klarifikasi dari Andi
+**Titik activity.md ini adalah CHECKPOINT saat Andi menyerah mengerjakan Flutter** — dokumen belum sempat diupdate ke arah PWA. Dikonfirmasi: **PWA (Blade+Livewire+Alpine, sesuai `versi_pwa.md`) adalah arah yang benar mulai sekarang**, bukan Flutter.
+
+### Perhatian keamanan yang disampaikan ke Andi
+Repo `Desahub` publik di GitHub. Mengingat riwayat insiden serupa di project Margonoandi Fanbase (deployment script dengan key hardcoded ter-expose), Andi diingatkan untuk memastikan `.env` ada di `.gitignore` dan tidak ada kredensial/APP_KEY yang ter-commit ke repo publik ini.
+
+### Status & Instruksi Lanjutan untuk Claude Code
+Karena sesi Claude Code (implementasi) dan sesi ini (arsitektur) tidak berbagi konteks otomatis, Andi perlu membawa ringkasan berikut ke Claude Code:
+1. **Hentikan setup Flutter** — `desahub_flutter/` tidak dilanjutkan untuk saat ini (bukan dihapus, cukup tidak dikerjakan).
+2. **Lanjutkan backend seperti rencana:** `Modules/Outlet` berikutnya (tabel `outlets` + `outlet_vertikal` pivot + `level_verifikasi`), lalu `Modules/Warung`, `Modules/Order`, `Modules/Payment`, `Modules/Kurir` — urutan tidak berubah, hanya konsumennya nanti PWA bukan Flutter.
+3. **Tambahkan frontend PWA** mengikuti `versi_pwa.md`: Blade + Livewire + Alpine, struktur `/warung`, `/konsumen`, `/kurir` dengan manifest & Service Worker masing-masing, offline 3 lapis (app shell caching, read-only cache, write queue khusus aksi kritis).
+4. **Update `cara_akses.md`** — ganti/tambahkan bagian panduan Flutter dengan panduan menjalankan PWA (npm run dev/build, cara akses tiap role via route prefix, cara test offline).
+5. **Cek keamanan:** pastikan `.env` tidak ter-commit ke repo publik `Desahub`.
+
+## Sesi 11 — Desain UI Modular untuk PWA (10 Juli 2026)
+
+### Keputusan: Token desain & landasan
+- Dijangkarkan ke dunia nyata warung/pasar lokal (bukan dashboard SaaS generik), mempertimbangkan 3 profil pengguna berbeda: pemilik warung (kurang tech-savvy), kurir (dipakai sambil jalan/naik motor, kontras tinggi & target sentuh besar wajib), konsumen (ekspektasi seperti app belanja biasa).
+- Warna: warna-dasar #FAF6ED, warna-teks #2B2622, warna-aksen-utama #E8A23C (kuning kunyit), warna-aksen-kedua #1F5C4F (hijau), warna-peringatan #C4482E.
+- Tipografi: Space Grotesk (judul/angka), Plus Jakarta Sans (body).
+- Elemen signature: sistem StatusChip — representasi visual langsung dari state machine Order & tier Warung yang sudah didesain di backend (bukan dekorasi).
+
+### Keputusan: Halaman per role + komponen bersama
+- Komponen bersama: StatusChip, OfflineBanner (Lapis 1), SyncIndicator (Lapis 3), KartuOutlet/KartuProduk, EmptyState, BottomNav.
+- Konsumen: Beranda/cari, Detail Outlet+Keranjang, Checkout (wajib online), Riwayat & Detail Order (timeline = state machine).
+- Warung: Dashboard (badge tier selalu terlihat), Order Masuk, Kelola Produk (toggle ketersediaan = aksi Lapis 3 offline).
+- Kurir: Status Online/Offline (halaman pembuka, elemen terbesar), Order Tersedia (tombol ambil besar, sekali tap), Order Aktif (update status = aksi Lapis 3 offline).
+- Semua wireframe dan komponen dipetakan langsung ke struktur folder Livewire dari versi_pwa.md.
+
+### File yang dibuat
+- `desain_ui.md` (baru): token desain, breakdown halaman per role dengan wireframe ASCII, komponen modular, pemetaan ke folder Livewire
+
+### Belum dirancang (dicatat di file)
+- Halaman Profil/Akun, verifikasi outlet, riwayat rekonsiliasi COD Kurir, token desain detail (spacing/radius/shadow)
+
+## Sesi 12 — Fitur POS untuk Transaksi Walk-in (10 Juli 2026)
+
+### Konteks
+Andi minta fitur POS untuk pembeli yang datang langsung tanpa lewat app. Diskusi mengungkap 2 pola berbeda yang sempat tercampur:
+- **Pola 1 "Ambil Sendiri"**: pesan lewat app dulu, datang & bayar di lokasi — BUKAN POS, cukup field `metode_pengiriman=ambil_sendiri` di Order yang sudah ada
+- **Pola 2 "POS murni"**: pembeli tanpa app sama sekali, diinput manual oleh Warung
+
+### Keputusan: Penempatan menu
+- POS dapat tombol bulat menonjol di TENGAH bottom nav Warung (akses cepat 1 tap), BUKAN menggantikan beranda — beranda (dashboard) tetap ada karena "ambil sendiri" (yang ternyata jadi pola tatap-muka paling umum) sudah otomatis masuk alur Order Masuk biasa.
+- Insight tambahan dari Andi: kurir kemungkinan besar jalan kaki/sepeda (Warung Biasa, area padat), motor/becak (Warung Grosir, kuantitas besar) — dicatat sebagai catatan fleksibilitas `kurir_profiles.kendaraan`.
+
+### Keputusan: POS tidak boleh punya jalur stok terpisah
+- Ditambahkan layanan bersama `BuatOrder` — dipanggil baik dari checkout Konsumen (online/ambil-sendiri) maupun POS Warung, satu-satunya pintu masuk ke `Sellable::prosesPengurangan()`. Mencegah duplikasi logika yang bisa reintroduce race condition oversell yang sudah diperbaiki sebelumnya.
+- Order dapat field baru: `jenis_transaksi` (online/pos), `metode_pengiriman` (diantar_kurir/ambil_sendiri, nullable), `buyer_type` dapat opsi baru `Umum` (walk-in tanpa akun).
+- State machine Order dapat jalur pendek `dibuat -> selesai` langsung (tanpa Kurir) untuk POS dan ambil-sendiri.
+- `PembayaranDiterima` untuk POS dipancarkan BERSAMAAN dengan `OrderDibuat` (uang tunai diterima seketika), beda dari alur COD-diantar-Kurir yang menunggu konfirmasi terpisah.
+
+### Keputusan: POS boleh dipakai offline (Lapis 3)
+- Beda dari checkout online Konsumen (wajib koneksi) — POS masuk daftar aksi kritis offline karena dipakai terus-menerus di kasir sepanjang hari.
+- Risiko diakui secara eksplisit di pos.md: transaksi offline yang bentrok bisa menyebabkan stok minus sesaat setelah sync — dicatat sebagai anomali di log, BUKAN ditolak (karena transaksi dunia nyata sudah terjadi, uang & barang sudah berpindah tangan).
+
+### File yang dibuat/diupdate
+- `pos.md` (baru): alur lengkap 4 layar POS (grid produk, keranjang, konfirmasi, kondisi offline), komponen baru, pemetaan folder Livewire
+- `project.md`: state machine diupdate (jalur pendek POS/ambil-sendiri), bagian baru "Layanan Bersama BuatOrder", field POS baru, catatan kendaraan Kurir
+- `events.md`: payload `OrderDibuat` diupdate (jenis_transaksi, metode_pengiriman, buyer_type=Umum), catatan `PembayaranDiterima` instan untuk POS
+- `versi_pwa.md`: POS ditambahkan ke daftar aksi kritis Lapis 3
+- `desain_ui.md`: bottom nav Warung dapat tombol POS bulat tengah, Order Masuk dapat badge metode pengiriman
+
+## Sesi 13 — Rekonsiliasi dengan `aturan_bisnis.md` (10 Juli 2026)
+
+### Konteks
+Andi upload `project.md` (versi terbaru dari Claude Code, sudah jauh berkembang: alamat terstruktur+GPS, radius slider, harga beli+margin, Struktur Menu Per Role, Control Center/Engine-based framing) dan `aturan_bisnis.md` (dokumen baru dari sesi Claude Code lain, framing "Business Agnostic Architecture" + 8 Commerce Engine + 13 Domain Business Rules). Diminta merekonsiliasi keduanya dengan konsep yang sudah dibangun di sini.
+
+### File project.md diupdate ke versi terbaru
+`project.md` yang dikelola di sini di-replace dengan versi upload (lebih maju), lalu ditambah rekonsiliasi di atasnya.
+
+### Temuan 1: Ketegangan arsitektur — diluruskan
+`aturan_bisnis.md` menyatakan filosofi "1 tabel Product generik untuk semua bisnis" (Business Agnostic literal). Ini BERTENTANGAN dengan alasan awal kontrak `Sellable` dibuat sebagai interface (bukan tabel bersama) — supaya tiap vertikal bisa punya struktur data berbeda total (Apotik: resep/expiry/batch, WarungMakan: tanpa stok angka).
+- **Diluruskan:** "Business Agnostic" yang benar = modul INTI (Order/Payment/Kurir/Auth) tidak perlu tahu jenis bisnis, itu memang tujuan Sellable. Bukan berarti bikin 1 tabel `products` universal.
+- Bukti pendukung: implementasi aktual sudah pakai tabel `warung_produk` (vertikal-spesifik), bukan `products` generik — jadi kemungkinan cuma framing bahasa yang kelewat literal, sudah diklarifikasi tertulis di project.md supaya tidak jadi salah kaprah nanti saat bangun vertikal lain.
+
+### Temuan 2: Employee Rules — dikonfirmasi ditunda
+`aturan_bisnis.md` memperkenalkan multi-pegawai per outlet (Owner/Kasir/Gudang/Admin/Kurir Internal) — belum ada di skema kita (`outlets.owner_user_id` asumsi 1 pemilik). Ditanya ke Andi: **ditunda**, tetap 1 pemilik per outlet untuk sekarang. Dicatat sebagai referensi masa depan (tabel `outlet_staff` pivot) di project.md, TIDAK dibangun sekarang.
+
+### Temuan 3: Domain bisnis baru lain — direkonsiliasi ke roadmap
+- Dashboard = daftar pekerjaan hari ini (bukan cuma statistik) — diadopsi, ditambahkan ke desain_ui.md
+- Finance Rules (jurnal sederhana, laba kotor, piutang/hutang) — lebih luas dari cod_settlements yang ada, ditandai BUTUH SESI DESAIN TERPISAH, tidak diimplementasikan diam-diam
+- CRM, Notification, AI/Warung Intelligence — konsisten dengan Fase 1.5/Fase 3 yang sudah ada, tinggal mempertajam detail
+- Report Rules — bisa diturunkan dari tabel yang sudah ada, tidak butuh tabel baru
+
+### File yang diupdate
+- `project.md`: diganti dengan versi terbaru dari Claude Code + bagian klarifikasi Business Agnostic + bagian "Domain Bisnis Tambahan" (tabel rekonsiliasi 7 domain)
+- `desain_ui.md`: prinsip dashboard-sebagai-daftar-pekerjaan ditambahkan ke bagian Dashboard Warung
+
+### Catatan
+`events.md`, `syarat_ketentuan.md`, `versi_pwa.md`, `pos.md` yang dikelola di sini belum tentu sinkron dengan perkembangan di Claude Code (cuma project.md yang diupload kali ini) — kalau ada perbedaan serupa ditemukan di file lain, perlu proses rekonsiliasi yang sama.
+
+## Sesi 14 — Sinkronisasi dengan Log Implementasi `last_update_pwa.md` (11 Juli 2026)
+
+### PENTING: Percabangan penomoran sesi
+`last_update_pwa.md` (dikelola Claude Code) ternyata FORK dari file ini persis di Sesi 10 — sesi 1-10 identik, tapi sejak itu kedua file jalan independen dengan nomor sesi yang SAMA tapi ISI BERBEDA:
+- File ini (last_update.md, sesi web): Sesi 11 = Desain UI Modular, Sesi 12 = POS, Sesi 13 = Rekonsiliasi aturan_bisnis.md
+- last_update_pwa.md (sesi Claude Code): Sesi 11 = PWA Full-Stack, Sesi 12 = Bug Fix + Email OTP + Google Login, Sesi 13 = Rebranding Derum, Sesi 14 = Barcode+POS+Laporan Konsumen
+
+**Konvensi ke depan:** nomor sesi TIDAK saling merujuk antar 2 file ini sejak titik fork (Sesi 10). `last_update.md` = keputusan arsitektur/desain dari sesi web; `last_update_pwa.md` = log implementasi teknis dari Claude Code. Kalau perlu rujukan silang, sebut nama file + judul sesi, bukan nomor saja.
+
+### Sinkronisasi temuan dari activity.md & last_update_pwa.md (implementasi s.d. 11 Juli 2026)
+- **Rebranding: Desahub → Derum** ("Belanja Deket Rumah") — dicatat sebagai nama produk resmi di project.md, arsitektur tetap pakai istilah generik.
+- **Konfirmasi kuat:** implementasi POS (buyer_type=Umum, jenis_transaksi=pos, emit OrderDibuat+PembayaranDiterima bersamaan, offline-capable) PERSIS sesuai desain `pos.md` — tidak ada penyimpangan.
+- **Barcode produk SELESAI diimplementasikan** (QuaggaJS + fallback Open Food Facts) — status roadmap diupdate dari "ditunda Fase 1.5" jadi selesai.
+- **Laporan Konsumen** — halaman baru yang tidak pernah didesain di sini, dibangun langsung di implementasi. Didokumentasikan retroaktif ke `desain_ui.md`.
+- **Klarifikasi kritis state machine:** ditemukan sebagai bug nyata saat implementasi — konfirmasi Warung untuk order `diantar_kurir` TIDAK BOLEH memicu transisi ke `diambil_kurir` (harus tetap `dibuat`), HANYA klaim atomik Kurir yang boleh. Kalau dilanggar, order "terkunci" sebelum sempat diklaim Kurir manapun. Ditambahkan sebagai klarifikasi eksplisit di project.md supaya tidak terulang.
+- **Email OTP + Google Login** — pengganti pragmatis untuk OTP HP murni (gratis, tidak butuh SMS gateway berbayar). Prinsip desain auth (1 users + profil per-peran, Sanctum) tidak berubah, cuma metode verifikasi awal.
+
+### File yang diupdate
+- `project.md`: catatan rebranding Derum, klarifikasi state machine (siapa boleh trigger diambil_kurir), status barcode, catatan Email OTP/Google Login
+- `desain_ui.md`: halaman baru "Laporan Konsumen" didokumentasikan retroaktif
+
+### Status
+Fondasi arsitektur & desain di sini (last_update.md, project.md, events.md, desain_ui.md, pos.md, versi_pwa.md, syarat_ketentuan.md) sudah cukup sinkron dengan implementasi aktual per 11 Juli 2026. `events.md`, `versi_pwa.md`, `syarat_ketentuan.md` masih berpotensi punya perbedaan lebih lanjut yang belum diverifikasi (belum ada versi terbaru file-file itu yang diupload untuk dibandingkan).

@@ -1,5 +1,118 @@
 # Last Update — Ekosistem Warung
 
+## Sesi 15 — Integrasi Barcode Produk + Scan Kamera + POS + Laporan Konsumen (11 Juli 2026)
+
+### Fitur Baru: Barcode Produk
+- **Kolom `barcode`** (varchar 50, unique) di `warung_produk`
+- **Input barcode** + tombol "Scan" di halaman Kelola Produk
+- **QuaggaJS** (CDN) untuk scan via kamera HP (EAN-13, UPC, Code128, Code39, Codabar, I2of5)
+- **Lookup API:** `GET /warung/produk/barcode/{barcode}` → cari DB lokal → fallback Open Food Facts (gratis)
+- **Auto-fill:** nama/harga/satuan terisi otomatis setelah scan
+
+### Database Barcode Indonesia
+- **TIDAK ada** database barcode produk Indonesia yang open source, lengkap, & gratis
+- Open Food Facts: gratis, tapi cakupan produk Indonesia terbatas
+- GS1 Indonesia / Produkmu (Telkom): berbayar
+- Solusi: input manual + scan untuk auto-fill dari DB lokal / Open Food Facts
+
+### Fitur Baru: POS (Point of Sale) — Transaksi Walk-in
+- **Halaman:** `GET /warung/pos` — grid produk, search, tap-to-add ke keranjang
+- **Keranjang:** floating button, modal dengan qty +/-, total real-time
+- **Pembayaran:** `POST /warung/pos/transaksi` → `ProdukWebController::posTransaksi()`
+  - `buyer_type = 'Umum'` (walk-in, tanpa akun)
+  - `jenis_transaksi = 'pos'`
+  - `metode_pembayaran = 'tunai_pos'`
+  - Langsung status `selesai` (tanpa kurir)
+  - Emit `OrderDibuat` + `PembayaranDiterima` bersamaan
+  - Kurangi stok atomik + catat `ketersediaan_movements`
+- **Bottom Nav:** tombol POS bulat menonjol di tengah (hijau, 56px, shadow)
+- **Offline:** banner otomatis saat offline, transaksi tetap bisa dilakukan (Lapis 3)
+
+### Fitur Baru: Laporan Konsumen
+- **Halaman:** `GET /konsumen/laporan` → `OutletController::laporan()`
+- **Data:** total order, total belanja, grafik pengeluaran mingguan, top 5 produk favorit, riwayat 10 order terakhir
+- **Filter:** dropdown bulan (12 bulan terakhir)
+- **Bottom Nav:** tombol "Profil" mengarah ke `/konsumen/laporan`
+
+### File yang Diubah/Dibuat
+- `resources/views/warung/pos.blade.php` — view POS
+- `app/Http/Controllers/Warung/ProdukWebController.php` — method `posTransaksi()`
+- `routes/web.php` — route POS + transaksi
+- `resources/views/layouts/warung.blade.php` — bottom nav + tombol POS
+- `resources/views/konsumen/laporan.blade.php` — view laporan konsumen
+- `app/Http/Controllers/Konsumen/OutletController.php` — method `laporan()`
+
+## Sesi 14 — Rebranding Desahub → Derum (11 Juli 2026)
+- Semua "Desahub" → "Derum"
+- Tagline: "Belanja Deket Rumah"
+- Layouts, manifests, email, auth views, welcome page diupdate
+
+## Sesi 13 — Bug Fix State Machine + Email OTP + Google Login (10 Juli 2026)
+
+### Konteks
+Setelah Sesi 12 PWA Full-Stack selesai, ditemukan beberapa bug kritis pada state machine Order, filter tab, duplikasi data, dan tampilan status yang tidak konsisten. Juga ditambahkan fitur Email OTP dan Google Login sebagai alternatif auth yang lebih simpel & gratis.
+
+### Bug Fix: State Machine Order
+- **Masalah:** Warung konfirmasi order diantar_kurir langsung transition ke `diambil_kurir`, sehingga kurir tidak bisa klaim (karena `klaimOlehKurir()` query `status='dibuat'`)
+- **Solusi:** `OrderWebController@konfirmasi` untuk diantar_kurir TIDAK transition status — tetap `dibuat`. Kurir yang klaim via `klaimOlehKurir()` yang atomically set `kurir_id` + transition ke `diambil_kurir`
+- `Order::klaimOlehKurir()` diperkuat: query `status='dibuat'` + `kurir_id IS NULL` + `metode_pengiriman='diantar_kurir'`
+
+### Bug Fix: Filter Tab Order Masuk
+- **Masalah:** Tab filter (Semua/Baru/Diproses/Selesai/Dibatalkan) tidak berfungsi karena `OrderWebController@index` tidak membaca `request('status')`
+- **Solusi:** Tambah `Request $request` parameter + `if ($request->filled('status'))` query filter
+
+### Bug Fix: Status Labels
+- **Masalah:** Label status tidak konsisten antar view (warung, konsumen, kurir) — `dibuat` kadang tampil "Dibuat", kadang "Diambil Kurir"
+- **Solusi:** Standarisasi:
+  - Warung: `dibuat→Baru` (#E8A23C), `diambil_kurir→Diproses`
+  - Konsumen: `dibuat→Menunggu Konfirmasi`, `diambil_kurir→Diambil Kurir`
+  - Kurir: `diambil_kurir→Diambil`, `diantar→Sedang Diantar`
+  - `status-chip.blade.php` component diupdate
+
+### Bug Fix: Migration Order & Missing Tables
+- **Masalah:** `migrate:fresh` gagal karena FK constraint — tabel `outlets` tidak ada, migration order berjalan sebelum dependensinya
+- **Solusi:**
+  - Buat `create_outlets_table` migration (hilang)
+  - Rename timestamp migration: users(000002) → auth_profiles(000003) → outlets(000003) → orders(000004) → warung(000006) → cod_settlements(000007)
+  - Hapus migration duplikat (users, personal_access_tokens, update_users_table)
+
+### Bug Fix: User Model & Factory
+- **Masalah:** Kolom `name` vs `nama`, `email_verified_at` vs `no_hp_verified_at` mismatch
+- **Solusi:** Update `$fillable`, `$casts` di `app/Models/User.php`, `UserFactory`, `DatabaseSeeder`
+
+### Fitur Baru: Email OTP (Gratis via Gmail SMTP)
+- **File baru:** `app/Mail/OtpMail.php` (Mailable), `resources/views/emails/otp.blade.php` (template branded)
+- **Flow:** User register → OTP dikirim ke email → fallback tampilkan di halaman jika gagal
+- **Konfigurasi:** Gmail SMTP di `.env` (butuh App Password Google)
+- **Biaya:** GRATIS (Gmail SMTP)
+
+### Fitur Baru: Google Login (Gratis via OAuth)
+- **Stack:** `laravel/socialite` + Google OAuth
+- **File baru:** migration `google_id`, `config/services.php` (google config)
+- **Flow:** User klik "Login dengan Google" → redirect Google → callback → find-or-create user → auto-login
+- **User baru** otomatis dibuat dengan `no_hp` placeholder, `no_hp_verified_at = now()` (Google sudah verifikasi)
+- **Biaya:** GRATIS (Google OAuth)
+
+### Database Reset
+- `php artisan migrate:fresh --seed` berhasil — 14 migration, 21 tabel
+- **Peringatan:** data user lama terhapus, harus registrasi ulang
+
+### File yang diupdate/dibuat
+- `app/Http/Controllers/Warung/OrderWebController.php` — filter status + fix state machine
+- `Modules/Order/app/Models/Order.php` — `klaimOlehKurir()` diperkuat
+- `resources/views/warung/order-masuk.blade.php` — status labels fix
+- `resources/views/konsumen/order-list.blade.php` — status labels fix
+- `resources/views/components/status-chip.blade.php` — update defaults
+- `app/Models/User.php` — `$fillable`, `$casts`
+- `database/factories/UserFactory.php` + `database/seeders/DatabaseSeeder.php` — fix kolom
+- 3 migration baru: `create_outlets_table`, `create_kurir_profiles_table` (hapus duplikat), `add_google_id_to_users`
+- `app/Mail/OtpMail.php` + `resources/views/emails/otp.blade.php` — Email OTP
+- `app/Http/Controllers/WebAuthController.php` — Email OTP + Google callback
+- `config/services.php` — Google OAuth config
+- `routes/web.php` — Google auth routes
+- `resources/views/auth/login.blade.php` — Google button
+- `.env.example` — Gmail SMTP + Google OAuth config
+
 ## Sesi 1 — Diskusi Arsitektur Awal (9 Juli 2026)
 
 ### Konteks

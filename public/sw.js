@@ -1,18 +1,24 @@
 // Service Worker — Desahub PWA (App Shell Caching)
 // Scope ditentukan per-role via registration di layout masing-masing
 
-const CACHE_NAME = 'desahub-pwa-v1';
+const CACHE_NAME = 'desahub-pwa-v2';
 const ASSETS_TO_CACHE = [
-    '/css/app.css',
-    '/js/app.js',
-    // Bootstrap CDN assets already cached by browser
+    '/',
+    // File spesifik ditambahkan setelah `npm run build` nanti
+    // Standard JS/CSS offline tools
+    '/js/cache-snapshot.js',
+    '/js/write-queue.js',
 ];
 
-// Install: cache app shell statis
+// Install: cache app shell statis (gagal satu = gagal semua, jadi pastikan semua file ada)
 self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME).then((cache) => {
-            return cache.addAll(ASSETS_TO_CACHE);
+            return cache.addAll(ASSETS_TO_CACHE).catch((err) => {
+                console.warn('[SW] cache.addAll gagal (mungkin file belum ada):', err.message);
+                // Jangan block instalasi — biarkan SW tetap aktif meski ada asset yg gagal di-cache
+                return Promise.resolve();
+            });
         }).then(() => self.skipWaiting())
     );
 });

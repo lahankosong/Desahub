@@ -54,6 +54,18 @@ class WarungDetail extends Model implements BuyerEligibilityPolicy
     }
 
     /**
+     * Alasan penolakan (jika bolehDibeliOleh return false).
+     */
+    public function getAlasanPenolakan(): string
+    {
+        return match ($this->tier) {
+            'biasa' => 'Warung Biasa dapat dibeli oleh siapa saja — seharusnya tidak sampai ke sini.',
+            'grosir' => 'Warung Grosir HANYA dapat di-order oleh Warung Biasa yang sudah terverifikasi. Pembelian oleh Konsumen atau outlet non-warung dilarang.',
+            default => 'Outlet ini tidak dapat di-order.',
+        };
+    }
+
+    /**
      * Update tier berdasarkan entri terbaru di warung_grosir_approvals.
      * BUKAN edit manual — diupdate lewat Event.
      */

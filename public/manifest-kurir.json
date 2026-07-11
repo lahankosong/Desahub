@@ -1,12 +1,12 @@
 {
-    "name": "Desahub Kurir",
+    "name": "Derum Kurir",
     "short_name": "Kurir",
-    "start_url": "/kurir",
-    "scope": "/kurir/",
+    "start_url": "/kurir/",
+    "scope": "/kurir",
     "display": "standalone",
     "background_color": "#ffffff",
     "theme_color": "#198754",
-    "description": "Antar order dan update status",
+    "description": "Antar order — Derum",
     "icons": [
         {
             "src": "/favicon.ico",

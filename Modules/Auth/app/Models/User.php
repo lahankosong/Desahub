@@ -16,6 +16,7 @@ class User extends Authenticatable
         'no_hp',
         'password',
         'email',
+        'google_id',
         'no_hp_verified_at',
         'otp_code',
         'otp_expires_at',

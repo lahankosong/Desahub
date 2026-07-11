@@ -1,5 +1,7 @@
 # Project: Platform Commerce Lokal (Ekosistem Warung sebagai vertikal pertama)
 
+> **Nama produk resmi: Derum** — "Belanja Deket Rumah" (rebranding dari nama kerja "Desahub", per Sesi 14 implementasi Juli 2026). Dokumen ini tetap pakai istilah generik "Outlet"/"Platform" untuk arsitektur, "Derum" dipakai di lapisan branding/UI saja.
+
 ## Visi
 Membangun **platform commerce lokal modular** yang menghubungkan:
 Distributor/Supplier -> Sales -> Outlet -> (Konsumen & Kurir Lokal)
@@ -66,6 +68,13 @@ Setiap model produk per-vertikal WAJIB mengimplementasikan kontrak ini. Order ha
 
 Karena "stok" tidak berlaku universal, event terkait diberi nama netral: **`KetersediaanBerubah`** (bukan `StokBerubah`) — lihat `events.md`.
 
+### Klarifikasi: "Business Agnostic Architecture" vs Pola Sellable-per-Vertikal
+`aturan_bisnis.md` (disusun terpisah) menyebut filosofi *"Engine tidak mengenal Warung/Apotek — 1 tabel Product generik untuk semua bisnis"*. Ini perlu diluruskan supaya tidak disalahartikan secara literal:
+
+- **Yang BENAR dan konsisten dengan arsitektur kita:** "Business Agnostic" berarti modul INTI (Order, Payment, Kurir, Auth) tidak perlu tahu jenis bisnis apa yang sedang ditransaksikan — itu persis tujuan kontrak `Sellable` (Order cuma pegang `sellable_type`+`sellable_id`, tidak peduli isinya).
+- **Yang SALAH kalau diterapkan literal:** membuat 1 tabel `products` universal untuk semua vertikal. Ini bertentangan dengan alasan awal kita bikin kontrak `Sellable` sebagai INTERFACE (bukan tabel bersama) — supaya tiap vertikal bisa punya struktur data yang benar-benar beda (Apotik butuh `no_resep`/`expiry`/`batch`, Warung Makan tidak punya konsep stok angka sama sekali). Tabel `warung_produk` yang sudah dipakai di implementasi (bukan `products` generik) SUDAH BENAR mengikuti pola kontrak, bukan pola tabel tunggal.
+- **Kesimpulan:** lanjutkan pola vertikal punya tabel/model sendiri yang mengimplementasikan `Sellable`, JANGAN membuat tabel produk generik lintas-vertikal.
+
 ### Kontrak `BuyerEligibilityPolicy` (opsional, jawaban untuk "siapa boleh beli dari outlet ini")
 Default: semua outlet boleh dibeli siapa saja (Konsumen maupun Outlet lain). Outlet yang punya aturan pembeli khusus (mis. Warung Grosir — lihat bagian Tingkatan Warung) mengimplementasikan kontrak ini untuk override:
 
@@ -125,7 +134,7 @@ Alasan: timestamp murni untuk field kuantitas berisiko kehilangan update yang sa
 | Sistem | Radius 1km (Haversine), dashboard admin minimal (verifikasi outlet, pantau transaksi) |
 
 **Ditunda ke Fase 1.5 (menyusul setelah alur COD stabil, ditambah sebagai konektor baru — bukti konsep plug-and-play jalan):**
-- Scan barcode (input produk manual dulu)
+- ~~Scan barcode~~ — **SELESAI diimplementasikan** (QuaggaJS scan kamera + lookup Open Food Facts sebagai fallback, karena tidak ada database barcode produk Indonesia yang open-source & lengkap)
 - Transfer & DP (= Listener baru untuk `PembayaranDiterima`, tanpa ubah modul Order/Payment yang sudah ada)
 - Notifikasi push realtime (sementara polling/refresh manual sesuai pola offline-first)
 
@@ -148,6 +157,22 @@ Alasan: timestamp murni untuk field kuantitas berisiko kehilangan update yang sa
 - Vertikal baru dipasang sebagai modul yang mengimplementasikan kontrak `Sellable` (+ `ComplianceReportable` kalau teregulasi): Apotik, Warung Makan, Toko Bangunan, Toko Pupuk
 - Modul Order/Payment/Kurir/Auth TIDAK dimodifikasi saat vertikal baru ditambah — murni penambahan modul + Listener
 - Apotik & Toko Pupuk butuh riset kebutuhan pelaporan pemerintah secara spesifik sebelum implementasi (belum dibahas detail)
+
+---
+
+## Domain Bisnis Tambahan (dari `aturan_bisnis.md`, direkonsiliasi ke roadmap)
+
+Dokumen `aturan_bisnis.md` memperkenalkan 13 domain bisnis (Dashboard, Produk, Inventory, Supplier, Order, Delivery, Customer, Finance, Employee, Report, AI, Notification, Warung Intelligence). Sebagian besar sudah cocok dengan roadmap yang ada; ini pemetaannya:
+
+| Domain baru | Status rekonsiliasi |
+|---|---|
+| **Dashboard = daftar pekerjaan hari ini** (bukan cuma statistik) | Prinsip diadopsi — lihat pembaruan di `desain_ui.md` |
+| **Finance Rules** (jurnal sederhana: kas masuk/keluar, piutang/hutang, laba kotor) | Lebih luas dari `cod_settlements` yang sudah ada — **butuh sesi desain terpisah**, jangan diimplementasikan diam-diam sebagai perluasan `cod_settlements` begitu saja karena ini pembukuan penuh, bukan sekadar rekonsiliasi COD |
+| **CRM Rules** (membership, poin, voucher, review) | Cocok masuk Fase 1.5+ sesuai roadmap yang sudah ada, belum didesain detail |
+| **Notification Rules** (10 trigger) | Cocok masuk Fase 1.5 (notifikasi push, sudah disebut di scope Fase 1.5), daftar 10 trigger di `aturan_bisnis.md` bisa jadi acuan detail nanti |
+| **AI Rules / Warung Intelligence** (5 kategori: Demand/Inventory/Customer/Supplier/Profit) | Konsisten dengan Fase 3 "Smart Platform" yang sudah ada, mempertajam detail bukan mengubah timeline |
+| **Report Rules** (top product, omzet, margin) | Bisa diturunkan dari tabel yang sudah ada (`orders`, `ketersediaan_movements`) tanpa tabel baru — murni lapisan query/laporan |
+| **Employee Rules** (Kasir/Gudang/Admin per outlet, multi-user per outlet) | **DITUNDA** — dikonfirmasi tidak perlu disiapkan skemanya sekarang, tetap 1 pemilik per outlet (`outlets.owner_user_id`) untuk saat ini. Kalau nanti dibutuhkan, akan butuh tabel baru `outlet_staff` (pivot: outlet_id, user_id, role, permissions) — dicatat sebagai referensi masa depan, BUKAN dibangun sekarang. |
 
 ---
 
@@ -204,17 +229,21 @@ WHERE id = :order_id AND kurir_id IS NULL
 ```
 `affected_rows = 0` → order sudah diklaim kurir lain, tampilkan pesan tersebut. Kurir pertama yang berhasil UPDATE otomatis menang tanpa perlu locking eksplisit di aplikasi.
 
-### 3. State Machine Order (formal)
+### 3. State Machine Order (formal — diperbarui Sesi 12)
 | Status | Bisa lanjut ke | Dipicu oleh |
 |---|---|---|
-| `dibuat` | `diambil_kurir`, `dibatalkan` | Sistem (checkout) -> Kurir claim / Konsumen-Warung batal |
-| `diambil_kurir` | `diantar`, `dibatalkan` | Kurir update status / pembatalan darurat |
-| `diantar` | `selesai`, `gagal_kirim` | Kurir konfirmasi sampai / gagal ketemu konsumen |
-| `selesai` | *(final)* | Kurir/Konsumen konfirmasi terima |
+| `dibuat` | `diambil_kurir`, `selesai` (ambil sendiri), `dibatalkan` | Sistem → Kurir claim / Warung konfirmasi ambil sendiri / Batal |
+| `diambil_kurir` | `diantar`, `dibatalkan` | Kurir update / pembatalan |
+| `diantar` | `selesai`, `gagal_kirim` | Kurir konfirmasi sampai / gagal |
+| `selesai` | *(final)* | — |
 | `dibatalkan` | *(final)* | — |
-| `gagal_kirim` | `dibatalkan` (setelah retry gagal) | Admin/Kurir |
+| `gagal_kirim` | `dibatalkan` | Admin/Kurir |
 
 Transisi di luar tabel ini DITOLAK di level aplikasi (bukan hanya diasumsikan tidak akan terjadi).
+
+**Klarifikasi penting (ditemukan sebagai bug saat implementasi, Sesi 13 log implementasi):** untuk order `diantar_kurir`, konfirmasi Warung **TIDAK BOLEH** memicu transisi ke `diambil_kurir` — status tetap `dibuat` setelah dikonfirmasi Warung. HANYA klaim atomik oleh Kurir (`WHERE status='dibuat' AND kurir_id IS NULL AND metode_pengiriman='diantar_kurir'`) yang boleh memicu transisi ini. Kalau Warung ikut memicu transisi saat konfirmasi, order akan "terkunci" sebelum sempat diklaim Kurir manapun — bertentangan dengan desain rebutan-order atomik di poin 2.
+
+**Jalur pendek `dibuat` → `selesai` langsung** (tanpa Kurir): berlaku untuk **ambil sendiri** (`metode_pengiriman = ambil_sendiri`) — Warung klik "✔ Selesai", status langsung final, pembayaran dicatat ke `cod_settlements` (semi-POS).
 
 ### 4. Alur Pembatalan/Kegagalan (Event baru)
 `OrderDibatalkan`:
@@ -226,9 +255,46 @@ Transisi di luar tabel ini DITOLAK di level aplikasi (bukan hanya diasumsikan ti
 MVP disederhanakan: tabel `cod_settlements` (append-only) mencatat siapa pegang uang siapa:
 ```
 cod_settlements
-  id, order_id, kurir_id, jumlah_diterima, status_setor (belum_disetor/sudah_disetor), dicatat_pada
+  id, order_id, kurir_id, jumlah_diterima, status_setor (belum_disetor/sudah_disetor), dicatat_pada, dicatat_oleh (warung/kurir/admin)
 ```
-Kurir akumulasi uang tunai yang dia pegang atas nama outlet; penyetoran dicatat manual oleh admin di dashboard untuk MVP (belum otomatis). Ini memastikan ada TEMPAT pencatatan sejak awal, meski proses rekonsiliasi penuh menyusul di fase berikutnya.
+- **Semi-POS:** untuk order "ambil sendiri", Warung mencatat pembayaran langsung ke `cod_settlements` saat klik "✔ Selesai". `kurir_id` NULL karena tidak ada kurir.
+- **Diantar kurir:** kurir yang mencatat COD saat serah terima barang ke konsumen.
+- Admin menyetor manual di dashboard untuk MVP. Ini memastikan ada TEMPAT pencatatan sejak awal.
+
+### 6. Metode Pengiriman
+Dua opsi saat checkout:
+| Metode | State Machine | Pembayaran |
+|---|---|---|
+| **Ambil Sendiri** (`ambil_sendiri`) | `dibuat` → `selesai` (langsung) | COD/transfer di warung |
+| **Diantar Kurir** (`diantar_kurir`) | `dibuat` → `diambil_kurir` → `diantar` → `selesai` | COD saat terima / transfer |
+
+Perubahan skema: `orders` punya 2 kolom baru:
+- `jenis_transaksi` (enum: `online`, `pos`) — default `online`
+- `metode_pengiriman` (enum: `diantar_kurir`, `ambil_sendiri`) — nullable untuk POS
+- `alamat_antar` — text, wajib hanya jika `metode_pengiriman = diantar_kurir`
+- `catatan` — text opsional
+
+### 7. Alamat Terstruktur + GPS
+Tabel `outlets` diperluas:
+```
+outlets
+  ...,
+  provinsi, kabupaten, kecamatan, desa_kelurahan, rt, rw, kode_pos,
+  lat (decimal 10,7), lng (decimal 10,7)
+```
+Urutan hierarki: Provinsi → Kabupaten/Kota → Kecamatan → Desa/Kelurahan → RT → RW → Kode Pos.
+
+GPS wajib untuk pencarian radius — warung tanpa GPS tidak muncul di hasil pencarian radius.
+
+### 9. Pencarian Radius (Konsumen)
+- **Default radius 1km** — menggunakan GPS dari profil konsumen (`konsumen_profiles.lat/lng`)
+- **Radius slider** — 1-50km, geser −/+
+- **Haversine + bounding-box** — optimasi query MySQL tanpa index spasial
+- **GPS prompt** — hanya muncul jika radius > 1km dan belum ada GPS input
+- **Reverse geocode** — konversi koordinat ke nama desa/kecamatan dari data outlet terdekat
+
+### 10. Harga Beli + Margin
+Tabel `warung_produk` punya kolom `harga_beli` (nullable decimal). View Warung menampilkan margin otomatis: `Margin: +RpXX.XXX` (harga jual - harga beli).
 
 ---
 
@@ -251,6 +317,8 @@ Draf lengkap ada di `syarat_ketentuan.md`. Prinsip inti: Platform belum menerapk
 ## Skema Autentikasi Lintas App
 
 **Mekanisme:** Laravel Sanctum (token ringan, cocok untuk shared hosting dibanding Passport yang butuh OAuth server penuh).
+
+**Catatan implementasi (Sesi 13 log implementasi):** OTP awalnya didesain via SMS ke HP, tapi diganti pragmatis jadi **Email OTP** (Gmail SMTP, gratis) karena SMS gateway berbayar. Ditambah juga **Google Login** (Laravel Socialite, gratis) sebagai opsi alternatif — user baru dari Google otomatis dianggap terverifikasi (`no_hp_verified_at` diisi `now()` karena Google sudah verifikasi identitas). Prinsip desain (1 users + profil per-peran, Sanctum untuk token API) tidak berubah — ini cuma penggantian metode verifikasi awal.
 
 **Prinsip:** 1 identitas dasar (1 akun) per orang, peran disimpan sebagai profil terpisah yang ditempel ke akun — bukan 1 kolom `role` tunggal.
 
@@ -324,6 +392,229 @@ HAVING jarak_km <= 1
 ORDER BY jarak_km ASC
 ```
 Bounding box (`:lat_min/max`, `:lng_min/max`) dihitung di aplikasi (±1km) sebelum query, supaya `WHERE` bisa pakai index biasa pada kolom `lat`/`lng` — `HAVING` baru menyaring jarak presisi dari himpunan kecil hasil bounding box.
+
+---
+
+## Struktur Menu Per Role (Visi Lengkap)
+
+Berikut adalah visi lengkap menu/fitur untuk setiap role. Yang sudah diimplementasikan ditandai ✅.
+
+### Halaman Warung
+```
+Dashboard
+  ✅ Omzet Hari Ini
+  ✅ Order Hari Ini
+  ✅ Produk Habis / Stok Tipis
+  ⏳ Kurir Aktif
+  ⏳ Sales Datang Hari Ini
+  ⏳ Restock
+  ⏳ Pendapatan Minggu Ini
+  ⏳ Top Product
+
+Produk
+  ✅ Tambah Produk (input manual)
+  ⏳ Scan Barcode
+  ⏳ Upload Foto
+  ⏳ Kategori
+  ✅ Harga (jual + beli + margin)
+  ✅ Stok
+  ⏳ Diskon
+  ⏳ Bundle
+
+Inventory
+  ✅ Stok (via ketersediaan_cache + ketersediaan_movements)
+  ⏳ Mutasi
+  ⏳ Barang Masuk
+  ⏳ Barang Keluar
+  ⏳ Penyesuaian
+  ⏳ Expired
+  ⏳ Forecast
+
+Order
+  ✅ Order Baru (filter: Semua, Dibuat, Diproses, Selesai, Dibatalkan)
+  ⏳ Dikirim
+  ⏳ Konfirmasi Pengiriman
+
+Supplier
+  ⏳ Sales
+  ⏳ Distributor
+  ⏳ Order ke Supplier
+  ⏳ Promo
+  ⏳ Chat
+  ⏳ Invoice
+
+Pelanggan
+  ⏳ Favorit
+  ⏳ Membership
+  ⏳ Riwayat
+  ⏳ Voucher
+  ⏳ Review
+
+Keuangan
+  ✅ Pendapatan (via omzet dashboard + cod_settlements)
+  ⏳ Pengeluaran
+  ⏳ Laba
+  ⏳ Piutang
+  ⏳ Tempo
+  ⏳ Kas
+
+AI
+  ⏳ Rekomendasi Restock
+  ⏳ Prediksi Penjualan
+  ⏳ Produk Lambat
+  ⏳ Produk Cepat
+  ⏳ Harga Kompetitor
+```
+
+### Halaman Konsumen
+```
+Dashboard
+  ✅ Warung Terdekat (radius slider 1-50km)
+  ✅ Produk dari warung dalam radius
+  ⏳ Promo
+  ⏳ Produk Favorit
+  ⏳ Order Terakhir
+  ⏳ Repeat Order
+  ⏳ Langganan
+
+Marketplace
+  ✅ Cari (search bar)
+  ⏳ Kategori
+  ⏳ Flash Sale
+  ✅ Warung Terdekat (Haversine)
+  ⏳ Diskon
+  ⏳ Voucher
+
+Checkout
+  ✅ Ringkasan Produk
+  ✅ Alamat (alamat_antar)
+  ✅ Metode Pengiriman (ambil sendiri / diantar kurir)
+  ✅ Metode Pembayaran (COD / transfer)
+  ✅ Catatan
+
+Akun
+  ⏳ Poin
+  ⏳ Membership
+  ⏳ Wishlist
+  ⏳ Notifikasi
+  ⏳ Chat
+  ⏳ Review
+```
+
+### Halaman Kurir
+```
+Dashboard
+  ✅ Online/Offline Toggle
+  ⏳ Pendapatan
+  ⏳ Order Masuk
+  ⏳ Rating
+  ⏳ Saldo
+
+Delivery
+  ⏳ Ambil Barang
+  ⏳ Antar
+  ⏳ Navigasi
+  ⏳ OTP
+  ⏳ Foto Bukti
+
+Keuangan
+  ⏳ Pendapatan
+  ⏳ Bonus
+  ⏳ Insentif
+  ⏳ Withdraw
+
+AI
+  ⏳ Jam Ramai
+  ⏳ Area Ramai
+  ⏳ Prediksi Order
+```
+
+### Halaman Sales (Fase 2)
+```
+Dashboard
+  ⏳ Target
+  ⏳ Omzet
+  ⏳ Warung Aktif
+  ⏳ Warung Baru
+  ⏳ Warung Tidak Aktif
+
+Warung
+  ⏳ Daftar Warung
+  ⏳ Lokasi
+  ⏳ Status
+  ⏳ Visit
+  ⏳ Chat
+  ⏳ Riwayat
+
+Produk
+  ⏳ Promo
+  ⏳ Harga
+  ⏳ Katalog
+  ⏳ Stok Distributor
+
+Order
+  ⏳ Order Baru
+  ⏳ Approval
+  ⏳ Invoice
+  ⏳ Pengiriman
+
+AI Sales
+  ⏳ Warung Yang Perlu Dikunjungi
+  ⏳ Produk Yang Harus Ditawarkan
+  ⏳ Prediksi Order Minggu Ini
+  ⏳ Rekomendasi Promo
+```
+
+---
+
+## 🧠 Control Center — Pusat Kendali Ekosistem
+
+Control Center adalah "otak" Commerce Engine — halaman pusat kendali yang menampilkan widget dan informasi sesuai peran pengguna. Bukan untuk satu jenis pengguna, tetapi menjadi fondasi tampilan yang sama dengan konten berbeda per peran.
+
+### Widget Control Center
+| Widget | Deskripsi | Pemakai |
+|---|---|---|
+| **Activity Feed** | Aliran aktivitas real-time: order baru, stok berubah, pembayaran, pengiriman | Semua |
+| **Notifications** | Notifikasi penting: order perlu diproses, stok habis, pembayaran diterima | Semua |
+| **Tasks** | Tugas hari ini: order harus diproses (warung), kunjungan sales (sales), pengiriman (kurir) | Semua |
+| **Calendar** | Jadwal: pengiriman, restock, kunjungan sales | Semua |
+| **Quick Actions** | Tindakan cepat: scan barcode, tambah produk, buat order, hubungi pelanggan | Semua |
+| **AI Assistant** | Asisten yang memahami konteks pengguna, memberikan rekomendasi dan insight | Semua |
+
+### Arsitektur Engine-Based (bukan Page-Based)
+
+Daripada membangun per halaman, platform dibangun berdasarkan **Engine** yang melayani banyak aplikasi sekaligus:
+
+| Engine | Digunakan Oleh | Status |
+|---|---|---|
+| **Identity Engine** | Semua pengguna | ✅ Auth module (Sanctum, register, login, OTP) |
+| **Catalog Engine** | Warung, Sales, Konsumen | ✅ Warung module (produk CRUD, Sellable contract) |
+| **Inventory Engine** | Warung, Distributor | ✅ Core module (ketersediaan_cache + movements) |
+| **Order Engine** | Warung, Konsumen, Sales | ✅ Order module (state machine, checkout) |
+| **Logistics Engine** | Kurir, Warung | ⏳ Kurir module (klaim atomik siap, UI siap) |
+| **Payment Engine** | Semua pengguna | ✅ Payment module (cod_settlements, semi-POS) |
+| **CRM Engine** | Warung, Konsumen | ⏳ Fase 1.5+ |
+| **Analytics Engine** | Warung, Sales, Admin | ⏳ Fase 3 |
+| **AI Engine** | Semua pengguna | ⏳ Fase 3+ |
+
+**Keunggulan arsitektur Engine-Based:**
+- **Satu engine, banyak aplikasi** — Order Engine yang sama dipakai Warung (order masuk), Konsumen (checkout), Sales (approval), Kurir (klaim)
+- **Vertikal baru = aturan bisnis + UI spesifik** — ApotekOS atau BakeryOS tidak perlu bangun ulang sistem dari nol, cukup ganti aturan bisnis dan antarmuka
+- **Konsisten dengan arsitektur modular** — setiap Engine = modul Laravel yang berkomunikasi lewat Event & Listener, bukan pemanggilan langsung
+- **Widget Control Center** — setiap Engine menyediakan data untuk Activity Feed, Tasks, Calendar, dan AI Assistant sesuai peran
+
+### Status Implementasi Engine (per Sesi 12)
+```
+Identity Engine    ████████████ ✅ 100%   Auth, register, login, OTP, profil
+Catalog Engine     ████████░░░░ ✅ 80%    Produk CRUD, Sellable, harga, satuan
+Inventory Engine   ████████░░░░ ✅ 80%    Ketersediaan cache + log, stok real
+Order Engine       ████████░░░░ ✅ 80%    State machine, checkout, metode kirim
+Logistics Engine   ██░░░░░░░░░░ ⏳ 20%    Model + klaim atomik siap, UI siap
+Payment Engine     ██████░░░░░░ ✅ 60%    COD settlement + semi-POS
+CRM Engine         ░░░░░░░░░░░░ ⏳ 0%     Belum dimulai (Fase 1.5+)
+Analytics Engine   ░░░░░░░░░░░░ ⏳ 0%     Belum dimulai (Fase 3)
+AI Engine          ░░░░░░░░░░░░ ⏳ 0%     Belum dimulai (Fase 3+)
+```
 
 ---
 

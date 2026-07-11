@@ -8,7 +8,9 @@ use Modules\Core\app\Contracts\BuyerEligibilityPolicy;
 class Outlet extends Model
 {
     protected $fillable = [
-        'owner_user_id', 'nama', 'lat', 'lng', 'alamat', 'level_verifikasi',
+        'owner_user_id', 'nama', 'lat', 'lng', 'alamat',
+        'provinsi', 'kabupaten', 'kecamatan', 'desa_kelurahan', 'rt', 'rw', 'kode_pos',
+        'level_verifikasi',
     ];
 
     protected function casts(): array

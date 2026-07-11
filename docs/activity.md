@@ -35,6 +35,227 @@
 
 ## Log Aktivitas
 
+### [2026-07-11] [Komputer: Laptop 1] — ✅ Sesi 17 — Fix Google Registration untuk Semua Role
+
+**Aktivitas:**
+- [x] **Google Registration:** fix `handleGoogleCallback()` di `WebAuthController`
+  - Sebelum: selalu buat `KonsumenProfile` (hanya untuk konsumen)
+  - Sesudah: buat profile sesuai role yang dipilih saat login
+    - `warung` → `OutletProfile::create()`
+    - `kurir` → `KurirProfile::create()`
+    - `konsumen` → `KonsumenProfile::create()` (default)
+- [x] **Register View:** tambah tombol "Daftar dengan Google" di `resources/views/auth/register.blade.php`
+  - Konsisten dengan login view yang sudah ada
+  - Link ke `/{role}/auth/google`
+
+**File diubah:**
+- `app/Http/Controllers/WebAuthController.php` — import `OutletProfile` + `KurirProfile`, fix `handleGoogleCallback()` untuk buat profile sesuai role
+- `resources/views/auth/register.blade.php` — tambah tombol Google registration
+
+**Catatan:**
+- Login dengan Google sudah ada untuk semua role (warung/konsumen/kurir)
+- Register dengan Google sekarang juga sudah ada untuk semua role
+- User yang daftar via Google langsung login (tidak perlu OTP)
+- Profile type dibuat otomatis sesuai role yang dipilih saat mengklik tombol Google
+
+### [2026-07-11] [Komputer: Laptop 1] — ✅ Sesi 16 — High Priority Features (Profil, Widgets, Verifikasi, Diskon)
+
+**Aktivitas:**
+- [x] **Profil Konsumen:** halaman edit profil (nama, no_hp, email) + ganti password
+  - View: `resources/views/konsumen/profil.blade.php`
+  - Controller: `OutletController::updateProfil()` + `gantiPassword()` (dengan Hash::check)
+  - Routes: `PUT /konsumen/profil`, `POST /konsumen/profil/password`
+  - Bottom nav updated ke `/konsumen/profil`
+- [x] **Kurir Aktif Widget:** dashboard warung menampilkan jumlah kurir online
+  - Query: `KurirProfile::where('is_online', true)->count()`
+  - Location: `resources/views/warung/dashboard.blade.php`
+- [x] **Top Product Widget:** dashboard warung menampilkan produk terlaris
+  - Query: OrderItem dengan filter outlet + status (selesai/diantar/diambil_kurir)
+  - Display: nama produk + jumlah terjual
+- [x] **Halaman Verifikasi Outlet:** upload dokumen usaha + foto lokasi
+  - View: `resources/views/warung/verifikasi.blade.php`
+  - Controller: `ProfilWebController::verifikasi()` + `submitVerifikasi()`
+  - Routes: `GET /warung/verifikasi`, `POST /warung/verifikasi`
+- [x] **Riwayat Transaksi COD (Kurir):** tabel transaksi COD milik kurir
+  - View: `resources/views/kurir/riwayat-transaksi.blade.php`
+  - Controller: `KurirWebController::riwayatTransaksi()`
+  - Route: `GET /kurir/riwayat-transaksi`
+- [x] **Upload Foto Produk:** kolom `foto` (varchar 500, nullable)
+  - Migration: `2026_07_11_000001_add_foto_kategori_diskon_bundle_to_warung_produk.php`
+  - Model: `Produk::$fillable` — tambah `'foto'`
+  - Controller: validasi + save di `store()` + `update()`
+- [x] **Kategori Produk:** kolom `kategori` (varchar 100, nullable)
+  - Model: `Produk::$fillable` — tambah `'kategori'`
+  - Controller: validasi + save di `store()` + `update()`
+  - View: form field di `kelola-produk.blade.php`
+- [x] **Diskon & Bundle:**
+  - Migration: `diskon` (unsignedTinyInteger, default 0) + `bundle` (varchar, nullable)
+  - Model: `Produk::$fillable` — tambah `'diskon'` + `'bundle'`
+  - Controller: validasi `diskon` (0-100) + `bundle` (string max 200)
+  - View: form fields di `kelola-produk.blade.php`
+
+**File baru/diubah:**
+- `resources/views/konsumen/profil.blade.php` (baru)
+- `resources/views/warung/verifikasi.blade.php` (baru)
+- `resources/views/kurir/riwayat-transaksi.blade.php` (baru)
+- `resources/views/warung/dashboard.blade.php` — tambah Kurir Aktif + Top Product widgets
+- `resources/views/warung/kelola-produk.blade.php` — tambah diskon + bundle fields
+- `resources/views/layouts/konsumen.blade.php` — update bottom nav ke `/konsumen/profil`
+- `app/Http/Controllers/Konsumen/OutletController.php` — tambah `use Hash`, `updateProfil()`, `gantiPassword()`
+- `app/Http/Controllers/Warung/ProfilWebController.php` — tambah `verifikasi()`, `submitVerifikasi()`
+- `app/Http/Controllers/Warung/ProdukWebController.php` — tambah validasi + save diskon + bundle
+- `app/Http/Controllers/Kurir/KurirWebController.php` — tambah `riwayatTransaksi()`
+- `Modules/Warung/app/Models/Produk.php` — tambah `foto`, `kategori`, `diskon`, `bundle` ke `$fillable`
+- `database/migrations/2026_07_11_000001_add_foto_kategori_diskon_bundle_to_warung_produk.php` (baru)
+- `routes/web.php` — tambah semua routes baru
+
+**Catatan:**
+- Jalankan `php artisan migrate` untuk apply kolom baru (foto, kategori, diskon, bundle)
+- Foto disimpan sebagai URL string (bukan file upload) untuk MVP
+- Diskon dalam persen (0-100), bundle dalam format text bebas
+
+### [2026-07-11] [Komputer: Laptop 1] — ✅ Sesi 15 — Integrasi Barcode Produk + Scan Kamera + POS + Laporan Konsumen
+
+**Aktivitas:**
+- [x] **Barcode Produk:** kolom `barcode` di `warung_produk`, input + scan QuaggaJS, lookup Open Food Facts
+- [x] **Laporan Konsumen:** halaman `/konsumen/laporan` (total order, total belanja, grafik mingguan, top 5 produk, riwayat)
+- [x] **POS (Point of Sale):** halaman `/warung/pos` untuk transaksi walk-in
+  - Grid produk dengan tap-to-add
+  - Keranjang dengan qty +/-
+  - Pembayaran tunai (`tunai_pos`)
+  - `buyer_type = 'Umum'`, `jenis_transaksi = 'pos'`, langsung `selesai`
+  - Emit `OrderDibuat` + `PembayaranDiterima` bersamaan
+  - Bottom nav warung: tombol POS bulat menonjol di tengah
+- [x] **Update docs:** activity.md, last_update_pwa.md, pos.md
+
+**File baru/diubah:**
+- `resources/views/warung/pos.blade.php` — view POS
+- `app/Http/Controllers/Warung/ProdukWebController.php` — method `posTransaksi()`
+- `routes/web.php` — route POS + transaksi
+- `resources/views/layouts/warung.blade.php` — bottom nav + tombol POS
+- `resources/views/konsumen/laporan.blade.php` — view laporan konsumen
+- `app/Http/Controllers/Konsumen/OutletController.php` — method `laporan()`
+- `docs/pos.md` — catatan implementasi
+
+**Aktivitas:**
+- [x] **Migration:** kolom `barcode` (varchar 50, unique) di `warung_produk` (sudah ada di DB)
+- [x] **Produk model:** `barcode` sudah di fillable
+- [x] **ProdukWebController:** validasi barcode (unique per produk), simpan di store/update
+- [x] **Route:** `GET /warung/produk/barcode/{barcode}` → `lookupByBarcode()`
+- [x] **`lookupByBarcode()`:** cari di DB lokal → fallback Open Food Facts API (gratis)
+- [x] **View kelola-produk:** input barcode + tombol "Scan" + modal kamera
+- [x] **QuaggaJS (CDN):** scan barcode via kamera (EAN-13, UPC, Code128, dll)
+- [x] **Auto-fill:** nama/harga/satuan setelah scan
+
+**Catatan:**
+- Database barcode produk Indonesia open source TIDAK ada yang lengkap & gratis
+- Open Food Facts: gratis tapi cakupan produk Indonesia terbatas
+- GS1 Indonesia / Produkmu: berbayar
+- Solusi: input manual + scan untuk auto-fill dari DB lokal / Open Food Facts
+
+### [2026-07-11] [Komputer: Laptop 1] — ✅ Sesi 14 — Rebranding Desahub → Derum (Belanja Deket Rumah)
+
+**Aktivitas:**
+- [x] Ganti semua "Desahub" → "Derum" di layouts (warung, konsumen, kurir)
+- [x] Title: "Derum — Belanja Deket Rumah" (konsumen), "Derum — Warung", "Derum — Kurir"
+- [x] Update manifests (warung, konsumen, kurir)
+- [x] Update email OTP template
+- [x] Update auth views (login, register, verify-otp)
+- [x] Update welcome page dengan 3 tombol (Belanja/Jualan/Antar)
+- [x] Update .env.example: APP_NAME=Derum, MAIL_FROM_NAME="Derum"
+- [x] Tagline resmi: **"Belanja Deket Rumah"**
+
+### [2026-07-10] [Komputer: Laptop 1] — ✅ Sesi 13 — Bug Fix State Machine + Email OTP + Google Login
+
+**Aktivitas:**
+- [x] **Fix State Machine Order:** `OrderWebController@konfirmasi` — diantar_kurir tetap status `dibuat` (tidak transition), kurir yang klaim via `klaimOlehKurir()`
+- [x] **Fix `Order::klaimOlehKurir()`** — query atomik: `status='dibuat'` + `kurir_id IS NULL` + `metode_pengiriman='diantar_kurir'`, atomically set `kurir_id` + status `diambil_kurir`
+- [x] **Fix `OrderWebController@index`** — tambah `Request $request` + filter `?status=` query param untuk tab filter (Semua/Baru/Diproses/Selesai/Dibatalkan)
+- [x] **Fix Status Labels:** `warung/order-masuk` (dibuat→Baru #E8A23C, diambil_kurir→Diproses), `konsumen/order-list` (dibuat→Menunggu Konfirmasi), `status-chip.blade.php` (update defaults)
+- [x] **Fix Migration Order:** buat migration `create_outlets_table` (hilang), rename timestamps supaya urutan dependensi: users → auth_profiles → outlets → orders → warung → cod_settlements
+- [x] **Fix Duplicate Migrations:** hapus `0001_01_01_000000_create_users_table.php` (duplicate), `2026_07_10_101823_update_users_table_for_auth.php` (obsolete), `2026_07_10_063917_create_personal_access_tokens_table.php` (duplicate)
+- [x] **Fix Model User:** `$fillable` ganti `'name'` → `'nama'`, `'no_hp'`; `$casts` ganti `'email_verified_at'` → `'no_hp_verified_at'`
+- [x] **Fix UserFactory + DatabaseSeeder:** sesuaikan dengan kolom baru (`nama`, `no_hp`, `no_hp_verified_at`)
+- [x] **Database Reset:** `php artisan migrate:fresh --seed` — 14 migration sukses, 21 tabel, 1 seed user
+- [x] **Email OTP (Gratis):** `app/Mail/OtpMail.php`, `resources/views/emails/otp.blade.php` (template branded), `WebAuthController@register` kirim via email + fallback tampilkan, register form email wajib, `.env.example` Gmail SMTP
+- [x] **Google Login (Gratis):** `composer require laravel/socialite`, migration `google_id`, `WebAuthController` redirectToGoogle + handleGoogleCallback (find-or-create), `config/services.php`, routes `/{role}/auth/google` + callback, tombol di login view, `.env.example` GOOGLE_CLIENT_*
+
+**Error ditemukan & difix:**
+| # | Error | Penyebab | Solusi | Status |
+|---|-------|----------|--------|--------|
+| 23 | FK `warung_detail.outlet_id → outlets.id` gagal | Tabel `outlets` tidak ada migration create | Buat `Modules/Outlet/database/migrations/..._create_outlets_table.php` | ✅ |
+| 24 | FK `orders.kurir_id → kurir_profiles.id` gagal | orders (000004) jalan sebelum kurir_profiles (000003) | Rename orders ke 000006 | ✅ |
+| 25 | FK `cod_settlements.order_id → orders.id` gagal | cod_settlements (000005) sebelum orders (000006) | Rename cod_settlements ke 000007 | ✅ |
+| 26 | Duplicate migration `create_users_table` | 2 file: `0001_01_01_000000_` + `2026_07_10_000002_` | Hapus yang pertama | ✅ |
+| 27 | `renameColumn hp→no_hp` error | Kolom `hp` sudah tidak ada (create_users baru pakai `no_hp`) | Hapus migration obsolete | ✅ |
+| 28 | Seeder `Unknown column 'name'` | User model masih `'name'` bukan `'nama'` | Ganti `$fillable` User model + UserFactory | ✅ |
+| 29 | Seeder `Unknown column 'email_verified_at'` | Kolom sudah `no_hp_verified_at` | Ganti UserFactory + User casts | ✅ |
+
+**Catatan penting:**
+- `migrate:fresh` menghapus SEMUA data user. User harus registrasi ulang.
+- Google OAuth + Email OTP keduanya GRATIS, tidak perlu layanan pihak ketiga berbayar.
+
+### [2026-07-10] [Komputer: Laptop 1] — ✅ Sesi 12 — PWA Full-Stack (Warung + Konsumen + Kurir)
+
+**Aktivitas:**
+- [x] **Fix redirect middleware:** `bootstrap/app.php` — redirect dinamis per role (warung/konsumen/kurir), bukan hardcode ke /konsumen/login
+- [x] **Form login/register/verify-otp** — posisi middle center (min-vh-100 + flex)
+- [x] **Token desain UI:** implementasi warna (`--warna-dasar, --warna-aksen-utama, --warna-aksen-kedua, --warna-peringatan, --warna-netral-garis`) + font (Space Grotesk + Plus Jakarta Sans) di 3 layout
+- [x] **CSRF meta tag + OfflineBanner** — di semua 3 layout (warung, konsumen, kurir)
+- [x] **Hapus semua judul h4** — menghemat ruang layar, langsung ke konten fungsional
+- [x] **Komponen bersama:** `<x-status-chip>` (12 varian: state machine Order + Ketersediaan + Tier Warung), `<x-offline-banner>` (auto-detect `navigator.onLine`)
+
+**Warung — 4 halaman penuh:**
+- [x] **Dashboard:** nama outlet + badge tier, jumlah order baru, stok tipis, order hari ini + omzet dari database, tombol cepat
+- [x] **Order Masuk:** filter tab (Semua/Baru/Diproses/Selesai/Dibatalkan), StatusChip warna, info pengiriman (🏪 Ambil Sendiri / 🚚 Diantar Kurir), info pembayaran (💵 COD / 🏦 Transfer / ✔ Dibayar / ⏳ Blm Dibayar), alamat antar, konfirmasi/tolak order
+- [x] **Kelola Produk:** form tambah/edit (nama, deskripsi, harga jual, harga beli, satuan, stok), toggle ketersediaan + offline queue (Lapis 3), SyncIndicator, margin otomatis
+- [x] **Profil:** 3 tab — Akun (nama, no HP, email), Outlet (nama warung, alamat lengkap, alamat terstruktur provinsi→RT/RW, GPS + tombol geolokasi, jam buka/tutup, kategori, tier, verifikasi), Password (ganti)
+- [x] **Daftar Outlet:** form daftar outlet baru jika belum punya (nama, alamat, GPS, jam buka, kategori)
+- [x] **Konfirmasi/Tolak Order:** `OrderWebController` — konfirmasi (ambil sendiri → langsung selesai, diantar → diambil_kurir), tolak (→ dibatalkan + emitOrderDibatalkan)
+
+**Konsumen — 4 halaman + flow checkout:**
+- [x] **Dashboard/Beranda:** search produk, radius slider (− / range / +), GPS dari profil konsumen (fallback otomatis), daftar produk dari warung dalam radius (Haversine + bounding-box), prompt GPS jika radius > 1km, tombol "+ Pesan" ke checkout
+- [x] **Outlet List:** radius slider compact, daftar warung dengan jarak, alamat terstruktur
+- [x] **Checkout:** ringkasan produk, metode pengiriman (🏪 Ambil Sendiri / 🚚 Diantar Kurir + alamat antar), metode pembayaran (💵 COD / 🏦 Transfer), catatan, tombol "Buat Pesanan"
+- [x] **Proses Checkout:** `CheckoutController@store` — validasi, kurangi stok atomik, buat Order + OrderItem, catat log ketersediaan, `emitOrderDibuat()`
+- [x] **Riwayat Order:** daftar order dari database, StatusChip, info warung, total, metode pengiriman + pembayaran
+
+**Kurir — 3 halaman:**
+- [x] **Dashboard:** toggle Online/Offline (UI besar), ringkasan order tersedia & aktif
+- [x] **Order Tersedia:** daftar order yang bisa diambil (empty state)
+- [x] **Order Aktif:** order yang sedang dikerjakan (empty state)
+
+**Backend — perubahan penting:**
+- [x] **Migration `harga_beli`** di `warung_produk`
+- [x] **Migration `jenis_transaksi` + `metode_pengiriman` + `alamat_antar` + `catatan`** di `orders`
+- [x] **Migration `alamat_terstruktur`** di `outlets` (provinsi, kabupaten, kecamatan, desa_kelurahan, rt, rw, kode_pos) + GPS decimal
+- [x] **Migration `cod_settlements`** — kurir_id nullable (untuk ambil sendiri), kolom `dicatat_oleh`
+- [x] **Model `Produk`:** `harga_beli` di fillable
+- [x] **Model `Outlet`:** 7 field alamat terstruktur + GPS di fillable
+- [x] **Model `Order`:** `jenis_transaksi`, `metode_pengiriman`, `alamat_antar`, `catatan` di fillable, state machine ditambah jalur `dibuat → selesai` (ambil sendiri)
+- [x] **Model `WarungDetail`:** implementasi `getAlasanPenolakan()` untuk kontrak `BuyerEligibilityPolicy`
+- [x] **Fix named arguments → positional:** `OrderDibuat::dispatch()`, `OrderDibatalkan::dispatch()`, `HasKetersediaanLog::catatPergerakan()`, `KetersediaanBerubah::dispatch()` di 3 file (WarungKetersediaanListener, PembatalanKetersediaanListener)
+- [x] **Enable modules:** Warung, Outlet, Order, Kurir, Payment (sebelumnya disabled)
+- [x] **Semi-POS:** `catatPembayaran()` di `OrderWebController` — catat ke `cod_settlements` saat order ambil sendiri selesai (COD dicatat, transfer pending)
+
+**Controllers baru (5):**
+- `ProdukWebController` — store, update, toggle ketersediaan
+- `ProfilWebController` — index, updateAkun, updatePassword, saveOutlet (daftar + edit)
+- `OrderWebController` — index, konfirmasi (ambil sendiri/antar), tolak, catatPembayaran (semi-POS)
+- `OutletController` (Konsumen) — index (produk radius), daftar (outlet radius), cariNamaLokasi (reverse geocode)
+- `CheckoutController` — index, store (checkout + kurangi stok atomik + emit event)
+
+**Routes:** ~25+ routes baru (warung: produk store/update/toggle, order konfirmasi/tolak, profil akun/password/outlet; konsumen: checkout, order; kurir: 3 halaman)
+
+**Error ditemukan & difix:**
+| # | Error | Penyebab | Solusi | Status |
+|---|-------|----------|--------|--------|
+| 18 | `BuyerEligibilityPolicy` abstract method | `WarungDetail` belum implementasi `getAlasanPenolakan()` | Tambah method | ✅ |
+| 19 | `HAVING` clause strict mode MySQL | `RadiusHelper::tambahHavingJarak()` pakai HAVING non-aggregat | Ganti ke `whereRaw()` di WHERE clause | ✅ |
+| 20 | Named parameter `$order_id` | `dispatch()` trait tidak support PHP 8 named arguments | Ganti ke positional di Order model | ✅ |
+| 21 | Named parameter `$sellableType` | Sama di WarungKetersediaanListener & PembatalanKetersediaanListener | Ganti ke positional | ✅ |
+| 22 | Modules disabled | Warung, Outlet, Order, Kurir, Payment tidak aktif | `php artisan module:enable` semua | ✅ |
+
 ### [2026-07-10] [Komputer: Laptop 1] — ✅ Debug Auth + Pivot Flutter→PWA
 
 **Aktivitas:**
@@ -154,31 +375,37 @@ Saat pindah ke komputer lain, lakukan ini berurutan:
 
 ---
 
-## Status Keseluruhan (per 10 Juli 2026)
+## Status Keseluruhan (per 10 Juli 2026 — Sesi 12)
 
 | Area | Status |
 |------|--------|
-| Arsitektur & desain | ✅ Selesai (10 sesi diskusi, lihat `last_update.md`) |
+| Arsitektur & desain | ✅ Selesai (12 sesi diskusi, lihat `last_update.md`) |
 | Spesifikasi teknis | ✅ Selesai (lihat `project.md`) |
 | Event registry | ✅ Selesai (lihat `events.md`) |
 | Syarat & ketentuan | ✅ Draft awal (lihat `syarat_ketentuan.md`) |
 | `Modules/Core` | ✅ Selesai (3 kontrak + trait + helper + 4 Event DTO) |
 | `Modules/Auth` | ✅ Selesai (User model + Sanctum + 3 profil + AuthController + routes) |
+| `Modules/Outlet` | ✅ Terintegrasi (alamat terstruktur, GPS, verifikasi, radius) |
+| `Modules/Warung` | ✅ Terintegrasi (produk CRUD, ketersediaan, harga beli, margin) |
+| `Modules/Order` | ✅ Terintegrasi (state machine, checkout, metode_pengiriman, metode_pembayaran, alamat_antar, cod_settlements) |
+| `Modules/Payment` | ✅ Terintegrasi (cod_settlements, nullable kurir_id, dicatat_oleh) |
+| `Modules/Kurir` | 🔧 Modul siap, halaman UI siap (order tersedia & aktif), backend klaim order atomik siap |
 | PWA — WebAuthController | ✅ Selesai (session-based auth: login, register, verify-otp) |
-| PWA — Layouts (3 role) | ✅ Selesai (warung, konsumen, kurir) |
-| PWA — Auth views | ✅ Selesai (login, register, verify-otp) |
-| PWA — Dashboards | ✅ Selesai (placeholder warung/konsumen/kurir) |
+| PWA — Layouts (3 role) | ✅ Selesai + token desain + CSRF + OfflineBanner |
+| PWA — Auth views | ✅ Selesai (login, register, verify-otp — middle center) |
+| PWA — Warung (4 halaman) | ✅ Dashboard, Order Masuk, Kelola Produk, Profil |
+| PWA — Konsumen (4 halaman) | ✅ Beranda (radius), Outlet List, Checkout, Riwayat Order |
+| PWA — Kurir (3 halaman) | ✅ Dashboard, Order Tersedia, Order Aktif |
+| PWA — Komponen bersama | ✅ StatusChip (12 varian), OfflineBanner |
 | PWA — Service Worker | ✅ Selesai (`sw.js` — Lapis 1 offline) |
 | PWA — Manifests (3) | ✅ Selesai (manifest-warung, -konsumen, -kurir) |
 | PWA — Offline JS | ✅ Selesai (cache-snapshot.js, write-queue.js) |
-| Livewire (v4.3.3) | ✅ Terinstall — siap untuk komponen interaktif |
-| `Modules/Outlet` | 🔧 Sedang dikerjakan (berikutnya) |
-| `Modules/Warung` | ❌ Belum dimulai |
-| `Modules/Order` | ❌ Belum dimulai |
-| `Modules/Payment` | ❌ Belum dimulai |
-| `Modules/Kurir` | ❌ Belum dimulai |
+| Flow checkout | ✅ Konsumen pilih produk → checkout → pilih pengiriman & bayar → Order tersimpan |
+| Semi-POS | ✅ Warung catat pembayaran COD ke cod_settlements |
+| Radius pencarian | ✅ Haversine + bounding-box + slider 1-50km + GPS profil |
+| State machine Order | ✅ dibuat → diambil_kurir → diantar → selesai + jalur ambil sendiri (dibuat→selesai) + dibatalkan |
 | Flutter (app_konsumen) | ⏸️ Dinonaktifkan sementara (PWA dulu) |
 | Flutter (app_kurir) | ⏸️ Dinonaktifkan sementara |
 | Flutter (app_outlet) | ⏸️ Dinonaktifkan sementara |
-| Database | ✅ 10 tabel terbuat (migrate sukses) |
+| Database | ✅ 15+ tabel terbuat (migrate sukses) |
 | Server | ✅ `php artisan serve --port=8000` |

@@ -30,24 +30,24 @@ class PembatalanKetersediaanListener
 
             // Catat kompensasi di log append-only (positif = pengembalian)
             HasKetersediaanLog::catatPergerakan(
-                sellableType: $sellableType,
-                sellableId: $sellableId,
-                outletId: $order->outlet_id,
-                jumlahPerubahan: $item->qty,
-                alasan: 'pembatalan',
-                referensiId: $event->order_id
+                $sellableType,
+                $sellableId,
+                $order->outlet_id,
+                $item->qty,
+                'pembatalan',
+                $event->order_id
             );
 
             // Pancarkan KetersediaanBerubah
             KetersediaanBerubah::dispatch(
-                sellableType: $sellableType,
-                sellableId: $sellableId,
-                outletId: $order->outlet_id,
-                jumlahPerubahan: $item->qty,
-                statusTersedia: null,
-                alasan: 'pembatalan',
-                referensiId: $event->order_id,
-                terjadiPada: now()->toDateTimeString()
+                $sellableType,
+                $sellableId,
+                $order->outlet_id,
+                $item->qty,
+                null,
+                'pembatalan',
+                $event->order_id,
+                now()->toDateTimeString()
             );
         }
     }

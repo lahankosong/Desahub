@@ -8,6 +8,7 @@
         "php": "^8.2",
         "laravel/framework": "^11.0",
         "laravel/sanctum": "*",
+        "laravel/socialite": "^5.28",
         "laravel/tinker": "^2.10",
         "livewire/livewire": "*",
         "nwidart/laravel-modules": "^11.0"

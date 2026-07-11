@@ -10,7 +10,7 @@ class Produk extends Model implements Sellable
 {
     protected $table = 'warung_produk';
 
-    protected $fillable = ['outlet_id', 'nama', 'harga', 'satuan', 'deskripsi', 'barcode'];
+    protected $fillable = ['outlet_id', 'nama', 'harga', 'harga_beli', 'satuan', 'deskripsi', 'barcode', 'foto', 'kategori', 'diskon', 'bundle'];
 
     public function outlet()
     {

@@ -17,22 +17,24 @@ Platform ini generik multi-vertikal (Warung sebagai vertikal pertama; Apotik, Wa
 ## Daftar Event Aktif
 
 ### `OrderDibuat`
-- **Dipancarkan oleh:** Modul Order
-- **Kapan:** saat checkout diselesaikan (Konsumen->Warung Biasa di MVP, atau Warung Biasa->Warung Grosir untuk B2B mulai Fase 2)
+- **Dipancarkan oleh:** Modul Order (lewat layanan bersama `BuatOrder` — dipakai baik checkout Konsumen maupun POS Warung, lihat project.md)
+- **Kapan:** saat checkout diselesaikan (Konsumen->Warung Biasa online/ambil-sendiri di MVP, POS walk-in di Warung, atau Warung Biasa->Warung Grosir untuk B2B mulai Fase 2)
 - **Payload:**
   | Field | Tipe | Keterangan |
   |---|---|---|
   | order_id | int | |
   | outlet_id | int | outlet penjual, generik berlaku semua vertikal |
-  | buyer_type | string | `Konsumen` \| `Outlet` (polymorphic — Outlet dipakai untuk transaksi B2B Warung Biasa -> Warung Grosir) |
-  | buyer_id | int | |
+  | buyer_type | string | `Konsumen` \| `Outlet` \| `Umum` (`Umum` khusus POS — pembeli walk-in tanpa akun) |
+  | buyer_id | int, nullable | null kalau buyer_type=Umum |
+  | jenis_transaksi | string | `online` \| `pos` |
+  | metode_pengiriman | string, nullable | `diantar_kurir` \| `ambil_sendiri`, null kalau jenis_transaksi=pos |
   | items | array | `[{sellable_type, sellable_id, qty, harga_satuan}]` |
   | total_harga | decimal | |
-  | metode_pembayaran | string | `cod` \| `transfer` \| `dp` |
+  | metode_pembayaran | string | `cod` \| `transfer` \| `dp` \| `tunai_pos` |
   | dibuat_pada | datetime | |
 - **Validasi sebelum dipancarkan:** Order memanggil kontrak `BuyerEligibilityPolicy` milik outlet penjual — kalau outlet punya aturan pembeli khusus (mis. Warung Grosir), request checkout ditolak sebelum event ini dipancarkan.
 - **Listener terdaftar (MVP):**
-  - `Modules/Kurir` — munculkan order baru ke daftar kurir yang online
+  - `Modules/Kurir` — munculkan order baru ke daftar kurir yang online (HANYA kalau `metode_pengiriman=diantar_kurir`; POS dan ambil-sendiri tidak memicu ini)
   - `Modules/Warung` — trigger `prosesPengurangan()` pada tiap item (implementasi `Sellable`), yang akan memancarkan `KetersediaanBerubah`
 
 ### `KetersediaanBerubah`
@@ -55,7 +57,7 @@ Platform ini generik multi-vertikal (Warung sebagai vertikal pertama; Apotik, Wa
 
 ### `PembayaranDiterima`
 - **Dipancarkan oleh:** Modul Payment
-- **Kapan:** saat pembayaran (COD/transfer/DP/nanti QRIS) dikonfirmasi diterima
+- **Kapan:** saat pembayaran (COD/transfer/DP/nanti QRIS) dikonfirmasi diterima. **Untuk POS (`metode_pembayaran=tunai_pos`): dipancarkan BERSAMAAN dengan `OrderDibuat`**, karena uang tunai diterima seketika di kasir — tidak menunggu konfirmasi terpisah seperti alur COD-diantar-Kurir.
 - **Payload:**
   | Field | Tipe | Keterangan |
   |---|---|---|

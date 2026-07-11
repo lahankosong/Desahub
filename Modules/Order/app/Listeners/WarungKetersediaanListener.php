@@ -36,12 +36,12 @@ class WarungKetersediaanListener
 
                 // 2. Catat pergerakan di log append-only
                 HasKetersediaanLog::catatPergerakan(
-                    sellableType: $sellableClass,
-                    sellableId: $sellableId,
-                    outletId: $event->outlet_id,
-                    jumlahPerubahan: -$qty,
-                    alasan: 'penjualan',
-                    referensiId: $event->order_id
+                    $sellableClass,
+                    $sellableId,
+                    $event->outlet_id,
+                    -$qty,
+                    'penjualan',
+                    $event->order_id
                 );
 
                 // 3. Panggil prosesPengurangan di model Sellable (logika spesifik vertikal)
@@ -52,14 +52,14 @@ class WarungKetersediaanListener
 
                 // 4. Pancarkan KetersediaanBerubah
                 KetersediaanBerubah::dispatch(
-                    sellableType: $sellableClass,
-                    sellableId: $sellableId,
-                    outletId: $event->outlet_id,
-                    jumlahPerubahan: -$qty,
-                    statusTersedia: null,
-                    alasan: 'penjualan',
-                    referensiId: $event->order_id,
-                    terjadiPada: now()->toDateTimeString()
+                    $sellableClass,
+                    $sellableId,
+                    $event->outlet_id,
+                    -$qty,
+                    null,
+                    'penjualan',
+                    $event->order_id,
+                    now()->toDateTimeString()
                 );
             }
         });
