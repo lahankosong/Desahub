@@ -35,6 +35,74 @@
 
 ## Log Aktivitas
 
+### [2026-07-11] [Komputer: Laptop 1] — ✅ Sesi 21 — Push to GitHub
+
+**Aktivitas:**
+- [x] Commit & push 87 files (7,844 insertions, 587 deletions)
+  - Commit: `7a78acb` — "Sesi 16-20: High Priority Features + Wilayah Data + Google Auth Fix + Bug Fixes"
+  - Push: `b0c357a..7a78acb` master → master
+
+### [2026-07-11] [Komputer: Laptop 1] — 🔧 Sesi 19-20 — Wilayah Indonesia (Provinsi, Kab/Kota, Kecamatan, Desa) + GPS
+
+**Aktivitas:**
+- [x] **Migration:** `wilayah_provinsi`, `wilayah_kabupaten`, `wilayah_kecamatan`, `wilayah_desa`
+  - Kode sebagai PK string (2, 5, 8, 13 digit sesuai BPS)
+  - FK cascade: desa → kecamatan → kabupaten → provinsi
+- [x] **Models:** `WilayahProvinsi`, `WilayahKabupaten`, `WilayahKecamatan`, `WilayahDesa`
+  - Semua model pakai `$incrementing = false`, `$keyType = 'string'`, `protected $table` + `$timestamps = false`
+  - Relations: HasMany/BelongsTo sesuai hirarki
+- [x] **WilayahController:** 4 endpoint API cascading dropdowns
+  - `GET /api/wilayah/provinsi` → list provinsi
+  - `GET /api/wilayah/kabupaten?provinsi_kode=35` → filter by prov
+  - `GET /api/wilayah/kecamatan?kabupaten_kode=3525` → filter by kab
+  - `GET /api/wilayah/desa?kecamatan_kode=3525010` → filter by kec
+- [x] **ImportWilayahData:** `php artisan wilayah:import`
+  - Auto-probe multiple GitHub sources (edwardsamuel/Wilayah-Administratif-Indonesia, kodewilayah/permendagri-72-2019)
+  - Truncate + import with progress bar
+  - Fallback: `--source=local --path=/path/to/csv`
+- [x] **WilayahSeeder:** 38 provinsi dari seeder (backup saat remote source offline)
+- [x] **Profil Warung View:** ganti input text → cascading select dropdowns
+  - JavaScript fetch API + DOM manipulation
+  - Hidden inputs sync nama saat submit
+  - Auto-load saved values
+  - Null guard: `if (!provSel) return;` untuk case tanpa outlet
+  - GPS geolocation button tetap ada
+
+**Error ditemukan & difix:**
+| # | Error | Penyebab | Solusi | Status |
+|---|-------|----------|--------|--------|
+| 30 | Tabel `wilayah_desas` not found (Laravel auto-pluralize) | Model name `WilayahDesa` → pluralize `wilayah_desas` | Tambah `protected $table = 'wilayah_desa'` di 4 model | ✅ |
+| 31 | GitHub CSV 404 (cahyadsn/wilayah) | Repo restructure, path berubah | Ganti bootstrap URL + auto-probe | ✅ |
+| 32 | JS `addEventListener` null di profil tab Akun | Select #provinsi-select hanya ada di tab Outlet | Bungkus dalam `DOMContentLoaded` + guard null | ✅ |
+
+**File baru/diubah:**
+- `database/migrations/2026_07_11_000002_create_wilayah_tables.php` (baru)
+- `app/Models/WilayahProvinsi.php`, `WilayahKabupaten.php`, `WilayahKecamatan.php`, `WilayahDesa.php` (baru)
+- `app/Http/Controllers/WilayahController.php` (baru)
+- `app/Console/Commands/ImportWilayahData.php` (baru)
+- `database/seeders/WilayahSeeder.php` (baru)
+- `resources/views/warung/profil.blade.php` — cascading dropdowns + JS
+- `routes/web.php` — 4 route API wilayah
+
+### [2026-07-11] [Komputer: Laptop 1] — 🔧 Sesi 18 — Bug Fixes (Namespace + Null Safety + Table Name)
+
+**Aktivitas:**
+- [x] **Fix Class Not Found:** `Modules\Kurir\app\Models\KurirProfile` → `Modules\Auth\app\Models\KurirProfile`
+  - Dashboard warung widget Kurir Aktif: fix namespace di view
+  - Semua model profile ada di `Modules/Auth`, bukan `Modules/Kurir`
+- [x] **Fix Attempt to read property "id" on null:**
+  - `KurirWebController@riwayatTransaksi`: `auth()->user()->kurirProfile->id` → `$user?->kurirProfile?->id`
+  - `riwayat-transaksi.blade.php`: `auth()->user()->kurirProfile->id` → `auth()->user()?->kurirProfile?->id`
+  - `dashboard.blade.php` Top Product: wrap `if ($outlet)` sebelum query `$outlet->id`
+- [x] **Clear cache:** `php artisan view:clear`
+
+**Error ditemukan & difix:**
+| # | Error | Penyebab | Solusi | Status |
+|---|-------|----------|--------|--------|
+| 33 | Class `Modules\Kurir\app\Models\KurirProfile` not found | Model ada di `Modules\Auth`, bukan `Modules\Kurir` | Ganti namespace di view + controller | ✅ |
+| 34 | Attempt to read property "id" on null (Kurir) | User belum punya KurirProfile (new Google user) | Null-safe operator `?->` | ✅ |
+| 35 | Attempt to read property "id" on null (dashboard line 90) | `$outlet` null → `$outlet->id` fail | Wrap dalam `if ($outlet)` | ✅ |
+
 ### [2026-07-11] [Komputer: Laptop 1] — ✅ Sesi 17 — Fix Google Registration untuk Semua Role
 
 **Aktivitas:**
