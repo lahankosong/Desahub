@@ -36,6 +36,20 @@
             <input type="hidden" id="produk-method" name="_method" value="POST">
             <input type="hidden" id="produk-id" name="produk_id" value="">
 
+            {{-- Barcode --}}
+            <div class="mb-3">
+                <label class="form-label fw-semibold" style="font-size: 0.85rem;">Barcode <span class="text-muted fw-normal">(opsional)</span></label>
+                <div class="input-group">
+                    <input type="text" name="barcode" id="produk-barcode" class="form-control" placeholder="Scan atau ketik barcode"
+                           style="border-color: var(--warna-netral-garis); background: #fff; font-family: var(--font-judul);">
+                    <button type="button" class="btn" onclick="bukaScanBarcode()"
+                            style="background-color: var(--warna-aksen-kedua); color: #fff; border: none;">
+                        <i class="bi bi-upc-scan"></i> Scan
+                    </button>
+                </div>
+                <small class="text-muted" style="font-size: 0.7rem;">Barcode otomatis cari nama produk dari database (jika ada)</small>
+            </div>
+
             {{-- Nama Produk --}}
             <div class="mb-3">
                 <label class="form-label fw-semibold" style="font-size: 0.85rem;">Nama Produk</label>
@@ -65,20 +79,6 @@
                         @endforeach
                     </select>
                 </div>
-            </div>
-
-            {{-- Barcode --}}
-            <div class="mb-3">
-                <label class="form-label fw-semibold" style="font-size: 0.85rem;">Barcode <span class="text-muted fw-normal">(opsional)</span></label>
-                <div class="input-group">
-                    <input type="text" name="barcode" id="produk-barcode" class="form-control" placeholder="Scan atau ketik barcode"
-                           style="border-color: var(--warna-netral-garis); background: #fff; font-family: var(--font-judul);">
-                    <button type="button" class="btn" onclick="bukaScanBarcode()"
-                            style="background-color: var(--warna-aksen-kedua); color: #fff; border: none;">
-                        <i class="bi bi-upc-scan"></i> Scan
-                    </button>
-                </div>
-                <small class="text-muted" style="font-size: 0.7rem;">Barcode otomatis cari nama produk dari database (jika ada)</small>
             </div>
 
             {{-- Harga Beli --}}
@@ -169,8 +169,12 @@
                     </div>
                     <div class="d-flex align-items-center gap-2">
                         <button class="btn btn-sm btn-outline-secondary rounded-pill" style="border-color: var(--warna-netral-garis); font-size: 0.75rem;"
-                                onclick="editProduk({{ $p['id'] }}, '{{ $p['nama'] }}', '{{ $p['deskripsi'] ?? '' }}', {{ $p['harga'] }}, {{ $p['harga_beli'] ?? 0 }}, '{{ $p['satuan'] ?? 'pcs' }}', {{ $stok }})" title="Edit">
+                                onclick="editProduk({{ $p['id'] }}, '{{ $p['nama'] }}', '{{ $p['deskripsi'] ?? '' }}', {{ $p['harga'] }}, {{ $p['harga_beli'] ?? 0 }}, '{{ $p['satuan'] ?? 'pcs' }}', '{{ $p['barcode'] ?? '' }}', {{ $stok }})" title="Edit">
                             <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-success rounded-pill" style="border-color: var(--warna-aksen-kedua); font-size: 0.75rem;"
+                                onclick="bukaRestok({{ $p['id'] }}, '{{ $p['nama'] }}', {{ $p['harga_beli'] ?? 0 }})" title="Restok">
+                            <i class="bi bi-plus-circle"></i>
                         </button>
                         <div class="form-check form-switch mb-0">
                             <input class="form-check-input produk-toggle" type="checkbox" {{ $tersedia ? 'checked' : '' }}
@@ -230,7 +234,7 @@
         document.getElementById('produk-form').action = '{{ route('warung.produk.store') }}';
     }
 
-    function editProduk(id, nama, deskripsi, harga, hargaBeli, satuan, stok) {
+    function editProduk(id, nama, deskripsi, harga, hargaBeli, satuan, barcode, stok) {
         const form = document.getElementById('form-produk');
         document.getElementById('form-title').textContent = 'Edit Produk #' + id;
         document.getElementById('btn-label').textContent = 'Update';
@@ -240,6 +244,7 @@
         document.getElementById('produk-deskripsi').value = deskripsi;
         document.getElementById('produk-harga').value = harga;
         document.getElementById('produk-satuan').value = satuan;
+        document.getElementById('produk-barcode').value = barcode || '';
         document.getElementById('produk-harga-beli').value = hargaBeli || '';
         document.getElementById('produk-stok').value = stok;
         // Gunakan action update (produk_id disubmit sebagai path param)
@@ -363,7 +368,105 @@
         })
         .catch(() => {});
     }
+
+    // ===== RESTOK MODAL =====
+    let restokProdukId = null;
+
+    function bukaRestok(id, nama, hargaBeliLama) {
+        restokProdukId = id;
+        document.getElementById('restok-produk-nama').textContent = nama;
+        document.getElementById('restok-harga-beli-lama').textContent = 'Rp' + Number(hargaBeliLama).toLocaleString('id-ID');
+        document.getElementById('restok-qty').value = '';
+        document.getElementById('restok-harga-beli-baru').value = '';
+        document.getElementById('restok-error').classList.add('d-none');
+        new bootstrap.Modal(document.getElementById('restokModal')).show();
+        setTimeout(() => document.getElementById('restok-qty').focus(), 300);
+    }
+
+    async function prosesRestok() {
+        const qty = parseInt(document.getElementById('restok-qty').value) || 0;
+        if (qty <= 0) {
+            document.getElementById('restok-error').textContent = 'Jumlah stok harus diisi.';
+            document.getElementById('restok-error').classList.remove('d-none');
+            return;
+        }
+
+        const hargaBeliBaru = document.getElementById('restok-harga-beli-baru').value.trim();
+        const btn = document.getElementById('btn-restok-submit');
+        const originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>';
+
+        try {
+            const body = { qty: qty };
+            if (hargaBeliBaru) body.harga_beli_baru = parseFloat(hargaBeliBaru);
+
+            const resp = await fetch('/warung/kelola-produk/' + restokProdukId + '/restock', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify(body)
+            });
+
+            const data = await resp.json();
+
+            if (data.success) {
+                // Sukses — reload halaman untuk tampilkan stok terbaru
+                bootstrap.Modal.getInstance(document.getElementById('restokModal'))?.hide();
+                location.reload();
+            } else {
+                document.getElementById('restok-error').textContent = data.message || 'Gagal.';
+                document.getElementById('restok-error').classList.remove('d-none');
+            }
+        } catch (e) {
+            document.getElementById('restok-error').textContent = 'Gagal terhubung ke server.';
+            document.getElementById('restok-error').classList.remove('d-none');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
+    }
 </script>
+
+{{-- ========== MODAL RESTOK ========== --}}
+<div class="modal fade" id="restokModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title fw-bold" style="font-size: 0.9rem;">
+                    <i class="bi bi-plus-circle me-1" style="color: var(--warna-aksen-kedua);"></i>Restok
+                </h6>
+                <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body py-2">
+                <p class="mb-2 fw-semibold" style="font-size: 0.85rem;" id="restok-produk-nama"></p>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold" style="font-size: 0.8rem;">Harga Beli Sebelumnya</label>
+                    <div class="text-muted" style="font-size: 0.9rem; font-weight: 600;" id="restok-harga-beli-lama">Rp0</div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold" style="font-size: 0.8rem;">Jumlah Stok Baru *</label>
+                    <input type="number" id="restok-qty" class="form-control form-control-sm" placeholder="Contoh: 100" min="1">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold" style="font-size: 0.8rem;">Harga Beli Baru <span class="text-muted fw-normal">(Rp)</span></label>
+                    <input type="number" id="restok-harga-beli-baru" class="form-control form-control-sm" placeholder="Kosongi jika harga tetap" min="0">
+                    <small class="text-muted" style="font-size: 0.7rem;">AVCO: harga beli akan dihitung rata-rata tertimbang</small>
+                </div>
+                <div id="restok-error" class="alert alert-danger d-none py-1" style="font-size: 0.75rem;"></div>
+                <button class="btn w-100 fw-semibold rounded-pill"
+                        style="background-color: var(--warna-aksen-kedua); color: #fff; font-size: 0.85rem; height: 36px;"
+                        id="btn-restok-submit"
+                        onclick="prosesRestok()">
+                    <i class="bi bi-check-lg me-1"></i> Restok
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 {{-- ========== MODAL SCAN BARCODE ========== --}}
 <div class="modal fade" id="scanModal" tabindex="-1" aria-hidden="true">
@@ -384,4 +487,4 @@
 </div>
 
 {{-- QuaggaJS --}}
-<script src="https://cdn.jsdelivr.net/npm/quagga@0.1.10/dist/quagga.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>

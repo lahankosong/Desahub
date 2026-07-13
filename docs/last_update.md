@@ -1,5 +1,126 @@
 # Last Update — Ekosistem Warung
 
+## Sesi 27 — Arsitektur Tiga Lapisan Produk + Chat Polling + Order Refactor (13 Juli 2026)
+
+### Konteks
+User meminta integrasi file referensi dari `docs/` (chat polling + order refactoring) lalu dilanjutkan implementasi arsitektur tiga lapisan produk sesuai spesifikasi: produk_master (katalog global), warung_produk (outlet lokal), kategori berjenjang, rounding rules, HET, dan harga history.
+
+### A. Chat Real-Time Auto-Polling
+- **View `chat.blade.php`:** ditambah JavaScript polling `fetch()` tiap 8 detik ke endpoint `/warung/chat/{id}/polling?after={last_id}` — pesan baru muncul otomatis tanpa reload halaman, auto-scroll ke bawah, escape HTML untuk keamanan XSS, mobile responsive (auto-scroll ke panel chat)
+- **Controller `ChatWebController`:** method `polling()` return JSON hanya pesan dengan `id > after`, auto-tandai `dibaca_pada` untuk pesan dari Konsumen
+- **Route:** `GET /warung/chat/{id}/polling` → `ChatWebController@polling`
+
+### B. Refactoring Order — Eloquent Relations Elegan
+- **Model `CodSettlement` dibuat** (`Modules/Payment/app/Models/CodSettlement.php`) — table `cod_settlements`
+- **Model `Order`:**
+  - Relasi `settlement()`: `hasOne(CodSettlement::class, 'order_id')`
+  - Relasi `buyer()`: polymorphic manual — `Konsumen` → `belongsTo(User)`, `PelangganWarung` → `belongsTo(PelangganWarung)`, lainnya → null
+  - **Bug ditemukan:** `buyer()` return null untuk `buyer_type='Umum'` → tidak bisa di-eager-load karena Eloquent butuh instance `Relation`, bukan null
+- **Controller `OrderWebController`:**
+  - Sebelum: `Order::with(['items', 'outlet'])` + manual `DB::table('cod_settlements')->whereIn(...)->keyBy('order_id')`
+  - Sesudah: `Order::with(['items', 'outlet', 'settlement'])` — eager loading Eloquent murni, hapus query manual
+  - `'buyer'` tidak di-include di `with()` (karena return null untuk Umum) — blade tetap akses via accessor `getBuyerAttribute()`
+- **View `order-masuk.blade.php`:**
+  - `$settlements->get($order->id)` → `$order->settlement` (relasi Eloquent langsung)
+  - Tampil nama buyer via `$order->buyer?->nama`
+  - Badge 🏪 Kasir untuk transaksi POS (`jenis_transaksi === 'pos'`)
+
+### C. Arsitektur Tiga Lapisan Produk
+
+**Spesifikasi dari user:**
+
+| Lapisan | Tabel | Isi |
+|---------|-------|-----|
+| 1 — Server (global) | `produk_master` | barcode UNIQUE, nama, varian, netto, foto, HET, kategori_id FK, created_by_outlet_id FK |
+| 2 — Outlet lokal | `warung_produk` | `produk_master_id` FK nullable, `harga` (jual), `harga_beli`, `stok`, `diskon`, `bundle` |
+| 3 — Browser cache | localStorage | Snapshot master untuk produk yang dijual outlet, sync saat online via write-queue |
+
+**Kategori berjenjang (self-referencing):**
+```
+kategoris: id, nama, parent_id (nullable)
+  Level 0: Kategori (parent_id = null)
+    Level 1: Sub Kategori (parent_id → kategori)
+      Level 2: Item (parent_id → sub)
+```
+
+**Rounding rules:**
+- Desimal 00-25 → bulatkan ke 0 (bawah)
+- Desimal 26-75 → bulatkan ke 50
+- Desimal 76-99 → bulatkan ke 100 (atas)
+- Contoh: 4561→4550, 4576→4600, 4525→4500
+
+**HET (Harga Eceran Tertinggi):** ditampilkan sebagai referensi di UI, outlet bisa set harga jual di bawah HET
+
+**Harga history:** `harga_produk_history` — log setiap kali outlet ubah harga jual (untuk hitung rata-rata)
+
+### File yang dibuat (9 baru)
+
+| File | Deskripsi |
+|------|-----------|
+| `database/migrations/...000001_create_kategoris_table.php` | Tabel `kategoris` self-referencing |
+| `database/migrations/...000002_create_produk_master_table.php` | Tabel `produk_master` (katalog global) |
+| `database/migrations/...000003_add_master_ref_to_warung_produk.php` | Tambah `produk_master_id` FK nullable |
+| `database/migrations/...000004_create_harga_produk_history_table.php` | Log perubahan harga_jual |
+| `Modules/Warung/app/Models/Kategori.php` | Model: parent(), children(), produkMaster() |
+| `Modules/Warung/app/Models/ProdukMaster.php` | Model: findByBarcode(), daftarkan(), relasi |
+| `Modules/Warung/app/Models/HargaHistory.php` | Model: warungProduk() |
+| `Modules/Core/app/Traits/HasRounding.php` | Trait: bulatkanHarga() |
+| `Modules/Payment/app/Models/CodSettlement.php` | Model: table cod_settlements |
+
+### File diubah (7)
+
+| File | Perubahan |
+|------|-----------|
+| `resources/views/warung/chat.blade.php` | JS polling 8 detik + auto-scroll + escape HTML |
+| `app/Http/Controllers/Warung/ChatWebController.php` | Method polling() |
+| `routes/web.php` | Route polling chat |
+| `Modules/Order/app/Models/Order.php` | Relasi settlement() + buyer() |
+| `app/Http/Controllers/Warung/OrderWebController.php` | Eager loading Eloquent, hapus DB::table manual |
+| `resources/views/warung/order-masuk.blade.php` | $order->settlement, buyer name, badge Kasir |
+| `Modules/Warung/app/Models/Produk.php` | produk_master_id fillable, relasi baru |
+| `app/Http/Controllers/Warung/ProdukWebController.php` | Import HasRounding, ProdukMaster, HargaHistory |
+
+### Error ditemukan & difix
+| # | Error | Penyebab | Solusi | Status |
+|---|-------|----------|--------|--------|
+| 45 | `Call to a member function addEagerConstraints() on null` | `Order::with(['buyer'])` — buyer() return null untuk Umum | Hapus 'buyer' dari with(), pakai accessor | ✅ |
+
+### Catatan
+- **Backward compatible** — `produk_master_id` nullable, outlet tetap bisa buat produk manual tanpa master
+- Jalankan `php artisan migrate` untuk 4 migration baru
+- Browser cache (Lapis 3) sudah ada via `localStorage` write-queue di JS `kelola-produk.blade.php`
+- HET belum ditampilkan di UI (perlu update `kelola-produk.blade.php` form & card — task terpisah)
+
+---
+
+## Sesi 25 — Review & Fix PosController.php (Web Session, 12 Juli 2026)
+
+### Konteks
+Andi upload `PosController.php` versi dari Web Session sebelumnya (Sesi 17) yang belum sempat diterapkan ke project. Diminta dicek kesesuaiannya dengan kondisi project aktual setelah Sesi 24.
+
+### Temuan
+File `PosController.php` versi Web Session mengandung **bug yang persis sama dengan Error #40 yang sudah difix di Sesi 24** (`OrderDibuat::dispatch($order)` dengan object, bukan `emitOrderDibuat()`). Namun setelah dicek lebih teliti, versi yang diupload ternyata sudah menggunakan `$order->emitOrderDibuat()` — artinya file ini sudah merupakan versi yang lebih baru dari versi yang sempat menyebabkan Error #40.
+
+### Perubahan pada PosController.php sebelum diterapkan
+
+1. **`PembayaranDiterima::dispatch(...)` di-comment** — karena signature event ini tidak diketahui persis dari sisi web session. Ditandai dengan komentar jelas supaya Andi verifikasi dulu sebelum uncomment. Jika event sudah ada dan signature-nya cocok, uncomment dan sesuaikan parameter.
+
+2. **Catatan deployment ditambahkan** di atas method `transaksi()`:
+   - Route `/warung/pos/transaksi` harus diarahkan ke `PosController@transaksi`, bukan ke `ProdukWebController@posTransaksi` yang lama
+   - Jangan apply migration `2026_07_11_000001` dan `2026_07_11_000002` dari Web Session — sudah ditangani di Sesi 23/24 (migration 000005-000008)
+
+3. **`emitOrderDibuat()`** sudah benar — tidak diubah.
+
+### Yang masih perlu dilakukan setelah apply PosController.php
+- [ ] Verifikasi signature `PembayaranDiterima` event lalu uncomment dispatch-nya kalau perlu
+- [ ] Pastikan route `/warung/pos/transaksi` menunjuk ke `PosController@transaksi`
+- [ ] Test alur cash dan tempo end-to-end di browser
+
+### File yang diupdate
+- `app/Http/Controllers/Warung/PosController.php` — komentar deployment + PembayaranDiterima di-comment
+
+---
+
 ## Sesi 17 — Fix produk_nama + Modul Chat Warung (11 Juli 2026)
 
 ### Konteks
@@ -31,6 +152,29 @@ Sesi 15 cuma mendesain Chat, belum diimplementasikan. Sekarang dibangun:
 - [x] Bottom nav: Profil → Chat
 - [x] Modul Chat sisi Outlet jalan (inbox + balas)
 - [ ] Sisi Konsumen + event PesanDikirim (belum dikerjakan)
+
+## Sesi 24 — Perbaikan POS + Fix Error Pembayaran (12 Juli 2026)
+
+### Konteks
+Setelah Sesi 23, ditemukan error 500 saat proses pembayaran POS dan UI yang kurang optimal untuk workflow kasir.
+
+### Perbaikan
+- **Fix error 500 pembayaran:** `OrderDibuat` event dipanggil dengan object `$order` bukan parameter terpisah. Diperbaiki dengan mengganti ke `$order->emitOrderDibuat()` di `PosController`.
+- **Hapus grid produk** di POS — fokus ke barcode scan saja, tidak perlu tampilan produk.
+- **Layout compact:** barcode input di header, keranjang di atas, payment di bawah.
+- **Auto-focus barcode input** setelah menambah item / klik +/- qty — untuk workflow scan cepat berurutan.
+- **Hapus duplicate migrations** yang menyebabkan error `Column already exists`.
+
+### Status
+- [x] Error 500 pembayaran diperbaiki
+- [x] UI POS dirombak jadi layout compact
+- [x] Auto-focus barcode input berfungsi
+- [x] Semua migration berjalan sukses
+
+### Perbaikan tambahan di order-masuk.blade.php
+- **N+1 query fixed:** Eager load `cod_settlements` di controller, kirim sebagai `$settlements` ke view
+- **nama_produk snapshot:** Ganti `$item->sellable->getNama()` ke `$item->nama_produk` (field snapshot yang sudah ada)
+- **buyer_type display:** Tambah kondisi untuk `Umum` (POS Walk-in) dan `PelangganWarung` (Tempo)
 
 ## Sesi 23 — Overhaul POS Kasir + PelangganWarung + Piutang (11 Juli 2026)
 

@@ -108,14 +108,24 @@ trait HasKetersediaanLog
      */
     public static function tambahCache(string $sellableType, int $sellableId, int $jumlah): void
     {
-        DB::table('ketersediaan_cache')->updateOrInsert(
-            [
+        $existing = DB::table('ketersediaan_cache')
+            ->where('sellable_type', $sellableType)
+            ->where('sellable_id', $sellableId)
+            ->first();
+
+        if ($existing) {
+            // Row exists: atomic increment/decrement
+            DB::table('ketersediaan_cache')
+                ->where('sellable_type', $sellableType)
+                ->where('sellable_id', $sellableId)
+                ->increment('qty', $jumlah);
+        } else {
+            // Row not exist: insert with absolute value (hanya positif)
+            DB::table('ketersediaan_cache')->insert([
                 'sellable_type' => $sellableType,
                 'sellable_id'   => $sellableId,
-            ],
-            [
-                'qty' => DB::raw("qty + {$jumlah}"),
-            ]
-        );
+                'qty'           => max(0, $jumlah),
+            ]);
+        }
     }
 }

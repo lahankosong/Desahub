@@ -72,7 +72,7 @@
                                             {{ $msg->isi_pesan }}
                                         </div>
                                         <div class="text-end mt-1" style="font-size: 0.65rem; color: #aaa;">
-                                            {{ $msg->dikirim_pada ? (\Carbon\Carbon::parse($msg->dikirim_pada)->format('H:i')) : $msg->created_at->format('H:i') }}
+                                            {{ $msg->dikirim_pada?->format('H:i') ?? $msg->created_at->format('H:i') }}
                                         </div>
                                     </div>
                                 </div>
@@ -84,7 +84,7 @@
                                             {{ $msg->isi_pesan }}
                                         </div>
                                         <div class="mt-1" style="font-size: 0.65rem; color: #aaa;">
-                                            {{ $msg->dikirim_pada ? (\Carbon\Carbon::parse($msg->dikirim_pada)->format('H:i')) : $msg->created_at->format('H:i') }}
+                                            {{ $msg->dikirim_pada?->format('H:i') ?? $msg->created_at->format('H:i') }}
                                         </div>
                                     </div>
                                 </div>
@@ -169,7 +169,7 @@
         }, 8000);
 
         function escapeHtml(s) {
-            return s.replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>');
+            return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         }
 
         // Tandai sedangKirim saat form dikirim

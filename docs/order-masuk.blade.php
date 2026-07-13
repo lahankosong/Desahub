@@ -70,7 +70,7 @@
         @endphp
         <div class="card border-0 shadow-sm" style="{{ $isFinished ? 'opacity: 0.7;' : '' }}">
             <div class="card-body">
-<div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="d-flex justify-content-between align-items-start mb-2">
                     <div>
                         <div class="fw-bold" style="font-family: var(--font-judul);">Order #{{ $order->id }}</div>
                         <small class="text-muted">

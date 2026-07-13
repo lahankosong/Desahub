@@ -67,16 +67,63 @@ Route::middleware('auth')->group(function () {
                 ->sum('total_harga')
             : 0;
         $stokTipis = 0;
+        $stokTipisList = [];
         if ($outlet) {
             foreach (Produk::where('outlet_id', $outlet->id)->get() as $p) {
                 $s = HasKetersediaanLog::getKetersediaanCache(Produk::class, $p->id);
-                if ($s > 0 && $s <= 2) $stokTipis++;
+                if ($s > 0 && $s <= 2) {
+                    $stokTipis++;
+                    $stokTipisList[] = ['id' => $p->id, 'nama' => $p->nama, 'stok' => $s, 'satuan' => $p->satuan];
+                }
             }
         }
         $warung = $outlet?->warungDetail;
 
+        // Piutang aktif
+        $piutangList = $outlet
+            ? \Modules\Warung\app\Models\Piutang::with('pelanggan')
+                ->where('outlet_id', $outlet->id)
+                ->where('status', 'aktif')
+                ->orderBy('jatuh_tempo')
+                ->take(10)
+                ->get()
+            : collect();
+        $totalPiutang = $piutangList->sum(fn($p) => $p->jumlah - $p->terbayar);
+
+        // Produk terjual hari ini (omzet detail)
+        $produkTerjualHariIni = $outlet
+            ? \Modules\Order\app\Models\OrderItem::select('nama_produk', \Illuminate\Support\Facades\DB::raw('SUM(qty) as total_qty'), \Illuminate\Support\Facades\DB::raw('SUM(qty * harga_satuan) as total_nilai'))
+                ->whereHas('order', function($q) use ($outlet) {
+                    $q->where('outlet_id', $outlet->id)
+                      ->where('status', 'selesai')
+                      ->whereDate('created_at', now()->toDateString());
+                })
+                ->groupBy('nama_produk')
+                ->orderBy('total_qty', 'desc')
+                ->get()
+            : collect();
+
+        // Top produk (semua waktu)
+        $topProdukList = $outlet
+            ? \Modules\Order\app\Models\OrderItem::select('nama_produk', \Illuminate\Support\Facades\DB::raw('SUM(qty) as total_qty'))
+                ->whereHas('order', function($q) use ($outlet) {
+                    $q->where('outlet_id', $outlet->id)->whereIn('status', ['selesai', 'diantar', 'diambil_kurir']);
+                })
+                ->groupBy('nama_produk')
+                ->orderBy('total_qty', 'desc')
+                ->take(10)
+                ->get()
+            : collect();
+
+        // Daftar kurir online & offline
+        $kurirList = \Modules\Auth\app\Models\KurirProfile::with('user')->get();
+        $kurirOnline = $kurirList->where('is_online', true);
+        $kurirOffline = $kurirList->where('is_online', false);
+
         return view('warung.dashboard', compact(
-            'outlet', 'totalProduk', 'orderBaru', 'orderHariIni', 'omzetHariIni', 'stokTipis', 'warung'
+            'outlet', 'totalProduk', 'orderBaru', 'orderHariIni', 'omzetHariIni',
+            'stokTipis', 'stokTipisList', 'warung', 'piutangList', 'totalPiutang',
+            'produkTerjualHariIni', 'topProdukList', 'kurirOnline', 'kurirOffline'
         ));
     })->name('warung.dashboard');
     Route::get('/warung/order-masuk', [OrderWebController::class, 'index'])->name('warung.order-masuk');
@@ -103,7 +150,7 @@ Route::middleware('auth')->group(function () {
 
         return view('warung.pos', ['produkList' => $produkList]);
     })->name('warung.pos');
-    Route::post('/warung/pos/transaksi', [ProdukWebController::class, 'posTransaksi'])->name('warung.pos.transaksi');
+    Route::post('/warung/pos/transaksi', [PosController::class, 'transaksi'])->name('warung.pos.transaksi');
     // Pelanggan Warung — buku pelanggan milik warung sendiri
     Route::get('/warung/pos/pelanggan', [PosController::class, 'daftarPelanggan'])->name('warung.pos.pelanggan');
     Route::post('/warung/pos/pelanggan', [PosController::class, 'tambahPelanggan'])->name('warung.pos.pelanggan.tambah');
@@ -124,6 +171,7 @@ Route::middleware('auth')->group(function () {
                 'harga'       => (float) $p->harga,
                 'harga_beli'  => (float) ($p->harga_beli ?? 0),
                 'satuan'      => $p->satuan,
+                'barcode'     => $p->barcode ?? '',
                 'stok'        => HasKetersediaanLog::getKetersediaanCache(Produk::class, $p->id),
                 'tersedia'    => HasKetersediaanLog::getKetersediaanCache(Produk::class, $p->id) > 0,
             ];
@@ -149,6 +197,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/warung/chat', [ChatWebController::class, 'index'])->name('warung.chat');
     Route::get('/warung/chat/{id}', [ChatWebController::class, 'show'])->name('warung.chat.show');
     Route::post('/warung/chat/{id}/kirim', [ChatWebController::class, 'kirim'])->name('warung.chat.kirim');
+    Route::get('/warung/chat/{id}/polling', [ChatWebController::class, 'polling'])->name('warung.chat.polling');
 
     // Konsumen
     Route::get('/konsumen', [OutletController::class, 'index'])->name('konsumen.dashboard');

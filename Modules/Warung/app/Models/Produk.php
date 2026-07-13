@@ -10,11 +10,24 @@ class Produk extends Model implements Sellable
 {
     protected $table = 'warung_produk';
 
-    protected $fillable = ['outlet_id', 'nama', 'harga', 'harga_beli', 'satuan', 'deskripsi', 'barcode', 'foto', 'kategori', 'diskon', 'bundle'];
+    protected $fillable = [
+        'outlet_id', 'produk_master_id', 'nama', 'harga', 'harga_beli',
+        'satuan', 'deskripsi', 'barcode', 'foto', 'kategori', 'diskon', 'bundle',
+    ];
 
     public function outlet()
     {
         return $this->belongsTo(\Modules\Outlet\app\Models\Outlet::class);
+    }
+
+    public function produkMaster()
+    {
+        return $this->belongsTo(ProdukMaster::class, 'produk_master_id');
+    }
+
+    public function hargaHistory()
+    {
+        return $this->hasMany(HargaHistory::class, 'warung_produk_id');
     }
 
     // --- Implementasi Sellable ---

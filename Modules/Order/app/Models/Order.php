@@ -39,6 +39,44 @@ class Order extends Model
     }
 
     /**
+     * Relasi ke cod_settlements (pembayaran COD/transfer).
+     */
+    public function settlement()
+    {
+        return $this->hasOne(\Modules\Payment\app\Models\CodSettlement::class, 'order_id');
+    }
+
+    /**
+     * Relasi buyer polymorphic manual berdasarkan buyer_type.
+     * Mengembalikan model Konsumen (User) atau PelangganWarung.
+     */
+    public function buyer()
+    {
+        if ($this->buyer_type === 'Konsumen' && $this->buyer_id) {
+            return $this->belongsTo(\App\Models\User::class, 'buyer_id');
+        }
+        if ($this->buyer_type === 'PelangganWarung' && $this->buyer_id) {
+            return $this->belongsTo(\Modules\Warung\app\Models\PelangganWarung::class, 'buyer_id');
+        }
+        return null;
+    }
+
+    /**
+     * Accessor untuk resolusi buyer manual (bukan polymorphic).
+     * buyer_type: 'Konsumen' | 'Umum' | 'PelangganWarung'
+     */
+    public function getBuyerAttribute()
+    {
+        if ($this->buyer_type === 'PelangganWarung' && $this->buyer_id) {
+            return \Modules\Warung\app\Models\PelangganWarung::find($this->buyer_id);
+        }
+        if ($this->buyer_type === 'Konsumen' && $this->buyer_id) {
+            return \App\Models\User::find($this->buyer_id);
+        }
+        return null;
+    }
+
+    /**
      * State machine transisi yang diizinkan.
      */
     public static array $validTransitions = [

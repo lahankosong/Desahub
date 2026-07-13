@@ -6,8 +6,11 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Auth;
 use Modules\Core\app\Traits\HasKetersediaanLog;
+use Modules\Core\app\Traits\HasRounding;
 use Modules\Outlet\app\Models\Outlet;
 use Modules\Warung\app\Models\Produk;
+use Modules\Warung\app\Models\ProdukMaster;
+use Modules\Warung\app\Models\HargaHistory;
 
 class ProdukWebController extends Controller
 {
@@ -78,9 +81,25 @@ class ProdukWebController extends Controller
             'barcode'    => 'nullable|string|max:50|unique:warung_produk,barcode,' . $id,
             'foto'       => 'nullable|string|max:500',
             'kategori'   => 'nullable|string|max:100',
+            'stok'       => 'nullable|integer|min:0',
         ]);
 
         $produk->update($valid);
+
+        // Update stok jika field stok dikirim
+        if ($request->has('stok')) {
+            $stokBaru = (int) $valid['stok'];
+            $stokLama = HasKetersediaanLog::getKetersediaanCache(Produk::class, $produk->id);
+            $selisih = $stokBaru - $stokLama;
+
+            if ($selisih !== 0) {
+                HasKetersediaanLog::tambahCache(Produk::class, $produk->id, $selisih);
+                HasKetersediaanLog::catatPergerakan(
+                    Produk::class, $produk->id, $produk->outlet_id,
+                    $selisih, 'koreksi', null
+                );
+            }
+        }
 
         return redirect()->route('warung.kelola-produk')->with('success', 'Produk berhasil diupdate.');
     }
@@ -95,22 +114,68 @@ class ProdukWebController extends Controller
 
     /**
      * Restock produk — POST /warung/kelola-produk/{id}/restock
+     * 
+     * ════════════════════════════════════════════════════════════════
+     * WEIGHTED AVERAGE COST (AVCO)
+     * ════════════════════════════════════════════════════════════════
+     * Saat restok dengan harga_beli_baru, harga_beli produk dihitung
+     * ulang dengan rumus rata-rata tertimbang:
+     *
+     *   avco = ((stok_lama × harga_beli_lama) + (qty_baru × harga_beli_baru))
+     *          ─────────────────────────────────────────────────────────────
+     *                           (stok_lama + qty_baru)
+     *
+     * Contoh:
+     *   Stok 2 × harga_beli 5.000 = 10.000
+     *   Restok 100 × harga_beli 5.125 = 512.500
+     *   AVCO = (10.000 + 512.500) / (2 + 100) = 5.122,55
      */
     public function restock(Request $request, $id)
     {
         $valid = $request->validate([
-            'qty' => 'required|integer|min:1',
+            'qty'             => 'required|integer|min:1',
+            'harga_beli_baru' => 'nullable|numeric|min:0',
         ]);
 
         $produk = Produk::findOrFail($id);
 
+        // Hitung AVCO jika harga_beli_baru dikirim
+        if ($request->has('harga_beli_baru') && $valid['harga_beli_baru'] !== null) {
+            $stokLama    = HasKetersediaanLog::getKetersediaanCache(Produk::class, $produk->id);
+            $hargaBeliLama = (float) ($produk->harga_beli ?? 0);
+            $hargaBeliBaru = (float) $valid['harga_beli_baru'];
+            $qtyBaru       = (int) $valid['qty'];
+
+            // Total nilai persediaan lama + baru
+            $nilaiLama = $stokLama * $hargaBeliLama;
+            $nilaiBaru = $qtyBaru * $hargaBeliBaru;
+            $totalStok = $stokLama + $qtyBaru;
+            $avco      = $totalStok > 0
+                ? ($nilaiLama + $nilaiBaru) / $totalStok
+                : $hargaBeliBaru;
+
+            // Update harga_beli produk dengan AVCO (bulatkan 2 desimal)
+            $produk->update(['harga_beli' => round($avco, 2)]);
+        }
+
+        // Tambah stok cache
         HasKetersediaanLog::tambahCache(Produk::class, $produk->id, $valid['qty']);
         HasKetersediaanLog::catatPergerakan(
             Produk::class, $produk->id, $produk->outlet_id,
             $valid['qty'], 'restock', null
         );
 
-        return redirect()->route('warung.kelola-produk')->with('success', "Stok {$produk->nama} bertambah +{$valid['qty']}.");
+        $msg = "Stok {$produk->nama} bertambah +{$valid['qty']}.";
+        if ($request->has('harga_beli_baru') && $valid['harga_beli_baru'] !== null) {
+            $msg .= " Harga beli AVCO: Rp" . number_format($produk->fresh()->harga_beli, 0, ',', '.');
+        }
+
+        // JSON response untuk AJAX request (dari modal restok)
+        if ($request->expectsJson() || $request->wantsJson()) {
+            return response()->json(['success' => true, 'message' => $msg]);
+        }
+
+        return redirect()->route('warung.kelola-produk')->with('success', $msg);
     }
 
     /**

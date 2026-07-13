@@ -35,6 +35,82 @@
 
 ## Log Aktivitas
 
+### [2026-07-13] [Komputer: Laptop 1] — ✅ Sesi 26 — Arsitektur Tiga Lapisan Produk (produk_master + kategori berjenjang + rounding rules)
+
+**Aktivitas:**
+- [x] **Chat Real-Time Auto-Polling:** update `chat.blade.php` + `ChatWebController` + route polling — pesan baru muncul tiap 8 detik tanpa reload halaman
+- [x] **Refactoring Order — Eloquent Relations:** buat model `CodSettlement`, tambah relasi `settlement()` + `buyer()` di Order model, refactor `OrderWebController` (hapus `DB::table()` manual, ganti eager loading `Order::with(['items','outlet','settlement'])`), update `order-masuk.blade.php` (pakai `$order->settlement`, `$order->buyer?->nama`)
+- [x] **Fix bug eager loading:** `buyer()` return null untuk `buyer_type='Umum'` → hapus dari `with()`, tetap pakai accessor `getBuyerAttribute()`
+- [x] **Arsitektur Tiga Lapisan Produk:**
+  - **Layer 1 — `produk_master` (katalog global):** migration + model, barcode UNIQUE, nama, varian, netto, foto, het (Harga Eceran Tertinggi), kategori_id FK, created_by_outlet_id FK
+  - **Layer 2 — `warung_produk` (outlet lokal):** migration tambah `produk_master_id` FK nullable (backward compatible, outlet tetap bisa buat produk manual), model update relasi `produkMaster()` + `hargaHistory()`
+  - **Layer 3 — Browser Cache (offline):** sudah ada via localStorage write-queue di JS `kelola-produk.blade.php`
+- [x] **Kategori Berjenjang:** migration `kategoris` (self-referencing `parent_id`), model `Kategori` dengan `parent()`, `children()`, `produkMaster()`
+- [x] **Harga History:** migration `harga_produk_history` (log setiap perubahan harga_jual per outlet), model `HargaHistory`
+- [x] **Rounding Rules Helper:** trait `HasRounding` — `bulatkanHarga()`: 26-75→50, 00-25→0, 76-99→100 (contoh: 4561→4550, 4576→4600, 4525→4500)
+- [x] **Update `ProdukWebController`:** import `HasRounding`, `ProdukMaster`, `HargaHistory` — siap untuk lookup master via barcode + catat history harga
+- [x] **Update docs:** `activity.md` + `last_update.md`
+
+**File baru (10):**
+- `database/migrations/2026_07_13_000001_create_kategoris_table.php`
+- `database/migrations/2026_07_13_000002_create_produk_master_table.php`
+- `database/migrations/2026_07_13_000003_add_master_ref_to_warung_produk.php`
+- `database/migrations/2026_07_13_000004_create_harga_produk_history_table.php`
+- `Modules/Warung/app/Models/Kategori.php`
+- `Modules/Warung/app/Models/ProdukMaster.php`
+- `Modules/Warung/app/Models/HargaHistory.php`
+- `Modules/Core/app/Traits/HasRounding.php`
+- `Modules/Payment/app/Models/CodSettlement.php`
+
+**File diubah (7):**
+- `resources/views/warung/chat.blade.php` — auto-scroll + polling JS 8 detik + escape HTML + mobile responsive
+- `app/Http/Controllers/Warung/ChatWebController.php` — method `polling()` return JSON + auto-tandai dibaca_pada
+- `routes/web.php` — route polling chat + import CodSettlement
+- `Modules/Order/app/Models/Order.php` — relasi `settlement()` + `buyer()`
+- `app/Http/Controllers/Warung/OrderWebController.php` — refactor eager loading
+- `resources/views/warung/order-masuk.blade.php` — pakai `$order->settlement`, badge 🏪 Kasir, buyer name
+- `Modules/Warung/app/Models/Produk.php` — `produk_master_id` fillable, relasi `produkMaster()` + `hargaHistory()`
+- `app/Http/Controllers/Warung/ProdukWebController.php` — import HasRounding, ProdukMaster, HargaHistory
+
+**Error ditemukan & difix:**
+| # | Error | Penyebab | Solusi | Status |
+|---|-------|----------|--------|--------|
+| 45 | `Call to a member function addEagerConstraints() on null` | Eager loading `'buyer'` gagal — relasi `buyer()` return null untuk `buyer_type='Umum'` (POS walk-in) | Hapus `'buyer'` dari `with()`, blade tetap akses via accessor `getBuyerAttribute()` | ✅ |
+
+**Catatan:**
+- Jalankan `php artisan migrate` untuk apply 4 migration baru (kategoris, produk_master, warung_produk update, harga_produk_history)
+- Arsitektur backward compatible — `produk_master_id` nullable, outlet tetap bisa buat produk manual tanpa master
+- HET ditampilkan sebagai referensi di UI (outlet bisa set harga jual di bawah HET)
+
+### [2026-07-12] [Komputer: Laptop 1] — ✅ Sesi 24 — Perbaikan POS + Fix Error Pembayaran
+
+**Aktivitas:**
+- [x] **git pull origin master** — sinkronisasi kode terbaru dari GitHub (commit 7e1ffe9 → 3938687)
+- [x] **Fix duplicate migrations:**
+  - Hapus `Modules/Order/database/migrations/2026_07_11_000003_add_nama_produk_to_order_items.php` (duplicate)
+  - Hapus `Modules/Order/database/migrations/2026_07_11_000008_make_nama_produk_nullable.php` (duplicate)
+  - Hapus `database/migrations/2026_07_11_000002_create_pelanggan_warung_and_piutang.php` (duplicate)
+- [x] **Fix migration `2026_07_11_000001_fix_orders_and_order_items_for_pos.php`:** tambah pengecekan `Schema::hasColumn('order_items', 'nama_produk')` sebelum add kolom
+- [x] **Fix error 500 pada pembayaran POS:**
+  - Error: `OrderDibuat::__construct(): Argument #1 ($order_id) must be of type int, Modules\Order\app\Models\Order given`
+  - Penyebab: `PosController` memanggil `OrderDibuat::dispatch($order)` dengan object, bukan parameter terpisah
+  - Solusi: Ganti ke `$order->emitOrderDibuat()` yang sudah benar di `Order` model
+- [x] **Perbaikan UI POS:**
+  - Hapus tampilan grid produk (tidak perlu, fokus ke barcode scan)
+  - Layout compact: barcode input di header, keranjang di atas, payment di bawah
+  - Auto-focus kursor ke input barcode setelah menambah item (untuk scan cepat berurutan)
+  - Auto-focus kursor ke input barcode setelah klik +/- qty
+- [x] **Semua migration berhasil** — `php artisan migrate` sukses
+
+**Error ditemukan & difix:**
+| # | Error | Penyebab | Solusi | Status |
+|---|-------|----------|--------|--------|
+| 40 | `OrderDibuat` event dispatch salah | PosController dispatch($order) bukan emitOrderDibuat() | Ganti ke $order->emitOrderDibuat() | ✅ |
+| 41 | Duplicate migrations | File migration sama terjadi di 2 lokasi | Hapus file duplicate, tambah pengecehan hasColumn | ✅ |
+| 42 | N+1 query di order-masuk | DB::table('cod_settlements') di dalam loop @foreach | Eager load settlements di controller, kirim ke view | ✅ |
+| 43 | nama_produk tidak pakai snapshot | $item->sellable->getNama() gagal kalau produk dihapus | Ganti ke $item->nama_produk (snapshot field) | ✅ |
+| 44 | POS order buyer_type tidak ditampilkan | buyer_type=Umum/PelangganWarung tampil "Konsumen #" | Tambah kondisi khusus untuk buyer_type di view | ✅ |
+
 ### [2026-07-11] [Komputer: Laptop 1] — ✅ Sesi 23 — Overhaul POS Kasir + PelangganWarung + Piutang
 
 **Aktivitas:**

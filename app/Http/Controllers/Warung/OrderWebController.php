@@ -22,7 +22,7 @@ class OrderWebController extends Controller
             return view('warung.order-masuk', ['orders' => collect()]);
         }
 
-        $query = Order::with(['items', 'outlet'])
+        $query = Order::with(['items', 'outlet', 'settlement'])
             ->where('outlet_id', $outlet->id);
 
         // Filter berdasarkan status dari tab
