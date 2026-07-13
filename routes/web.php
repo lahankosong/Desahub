@@ -164,20 +164,39 @@ Route::middleware('auth')->group(function () {
             : collect();
 
         $produkList = $produk->map(function ($p) {
+            $master = $p->produkMaster;
             return [
-                'id'          => $p->id,
-                'nama'        => $p->nama,
-                'deskripsi'   => $p->deskripsi,
-                'harga'       => (float) $p->harga,
-                'harga_beli'  => (float) ($p->harga_beli ?? 0),
-                'satuan'      => $p->satuan,
-                'barcode'     => $p->barcode ?? '',
-                'stok'        => HasKetersediaanLog::getKetersediaanCache(Produk::class, $p->id),
-                'tersedia'    => HasKetersediaanLog::getKetersediaanCache(Produk::class, $p->id) > 0,
+                'id'               => $p->id,
+                'nama'             => $p->nama,
+                'deskripsi'        => $p->deskripsi,
+                'harga'            => (float) $p->harga,
+                'harga_beli'       => (float) ($p->harga_beli ?? 0),
+                'satuan'           => $p->satuan,
+                'barcode'          => $p->barcode ?? '',
+                'foto'             => $p->foto ?? '',
+                'kategori'         => $p->kategori ?? '',
+                'diskon'           => $p->diskon ?? 0,
+                'bundle'           => $p->bundle ?? '',
+                'stok'             => HasKetersediaanLog::getKetersediaanCache(Produk::class, $p->id),
+                'tersedia'         => HasKetersediaanLog::getKetersediaanCache(Produk::class, $p->id) > 0,
+                'produk_master_id' => $p->produk_master_id,
+                'het'              => $master ? (float) $master->het : null,
             ];
         })->toArray();
 
-        return view('warung.kelola-produk', ['produkList' => $produkList]);
+        $kategoriList = \Modules\Warung\app\Models\Kategori::root();
+
+        // Siapkan sub kategori per parent_id untuk cascading dropdown
+        $subKategoriList = [];
+        foreach ($kategoriList as $kat) {
+            $subKategoriList[$kat->id] = $kat->children()->get(['id', 'nama'])->toArray();
+        }
+
+        return view('warung.kelola-produk', [
+            'produkList' => $produkList,
+            'kategoriList' => $kategoriList,
+            'subKategoriList' => $subKategoriList,
+        ]);
     })->name('warung.kelola-produk');
     Route::post('/warung/kelola-produk', [ProdukWebController::class, 'store'])->name('warung.produk.store');
     Route::put('/warung/kelola-produk/{id}', [ProdukWebController::class, 'update'])->name('warung.produk.update');

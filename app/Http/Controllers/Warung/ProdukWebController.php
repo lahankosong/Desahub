@@ -20,17 +20,21 @@ class ProdukWebController extends Controller
     public function store(Request $request)
     {
         $valid = $request->validate([
-            'nama'       => 'required|string|max:200',
-            'harga'      => 'required|numeric|min:0',
-            'harga_beli' => 'nullable|numeric|min:0',
-            'satuan'     => 'required|string|max:20',
-            'deskripsi'  => 'nullable|string',
-            'barcode'    => 'nullable|string|max:50|unique:warung_produk,barcode',
-            'foto'       => 'nullable|string|max:500',
-            'kategori'   => 'nullable|string|max:100',
-            'diskon'     => 'nullable|integer|min:0|max:100',
-            'bundle'     => 'nullable|string|max:200',
-            'stok'       => 'required|integer|min:0',
+            'nama'          => 'required|string|max:200',
+            'varian'        => 'nullable|string|max:100',
+            'netto'         => 'nullable|numeric|min:0',
+            'harga'         => 'required|numeric|min:0',
+            'harga_grosir'  => 'nullable|numeric|min:0',
+            'min_qty_grosir'=> 'nullable|integer|min:1',
+            'harga_beli'    => 'nullable|numeric|min:0',
+            'satuan'        => 'required|string|max:20',
+            'deskripsi'     => 'nullable|string',
+            'barcode'       => 'nullable|string|max:50|unique:warung_produk,barcode',
+            'foto'          => 'nullable|string|max:500',
+            'kategori'      => 'nullable|string|max:100',
+            'diskon'        => 'nullable|integer|min:0|max:100',
+            'bundle'        => 'nullable|string|max:200',
+            'stok'          => 'required|integer|min:0',
         ]);
 
         // Ambil outlet milik user yang sedang login
@@ -40,18 +44,49 @@ class ProdukWebController extends Controller
             return back()->withErrors(['outlet' => 'Anda belum punya outlet. Silakan daftarkan outlet terlebih dahulu.']);
         }
 
+        // Bulatkan harga jual sesuai aturan rounding
+        $hargaBersih = HasRounding::bulatkanHarga($valid['harga']);
+
+        // Jika ada barcode dan tidak ada produk_master_id, coba daftarkan ke produk_master
+        $produkMasterId = $request->input('produk_master_id');
+        if (!empty($valid['barcode']) && !$produkMasterId) {
+            $existingMaster = ProdukMaster::findByBarcode($valid['barcode']);
+            if (!$existingMaster) {
+                // Daftarkan sebagai master baru
+                $newMaster = ProdukMaster::daftarkan([
+                    'barcode'            => $valid['barcode'],
+                    'nama'               => $valid['nama'],
+                    'varian'             => $valid['varian'] ?? null,
+                    'netto'              => $valid['netto'] ?? null,
+                    'deskripsi'          => $valid['deskripsi'] ?? null,
+                    'foto'               => $valid['foto'] ?? null,
+                    'het'                => $hargaBersih,
+                    'kategori_id'        => null,
+                    'created_by_outlet_id' => $outlet->id,
+                ]);
+                $produkMasterId = $newMaster->id;
+            } else {
+                $produkMasterId = $existingMaster->id;
+            }
+        }
+
         $produk = Produk::create([
-            'outlet_id'  => $outlet->id,
-            'nama'       => $valid['nama'],
-            'harga'      => $valid['harga'],
-            'harga_beli' => $valid['harga_beli'] ?? null,
-            'satuan'     => $valid['satuan'],
-            'deskripsi'  => $valid['deskripsi'] ?? null,
-            'barcode'    => $valid['barcode'] ?? null,
-            'foto'       => $valid['foto'] ?? null,
-            'kategori'   => $valid['kategori'] ?? null,
-            'diskon'     => $valid['diskon'] ?? 0,
-            'bundle'     => $valid['bundle'] ?? null,
+            'outlet_id'        => $outlet->id,
+            'produk_master_id' => $produkMasterId ?: null,
+            'nama'             => $valid['nama'],
+            'varian'           => $valid['varian'] ?? null,
+            'netto'            => $valid['netto'] ?? null,
+            'harga'            => $hargaBersih,
+            'harga_grosir'     => $valid['harga_grosir'] ?? null,
+            'min_qty_grosir'   => $valid['min_qty_grosir'] ?? null,
+            'harga_beli'       => $valid['harga_beli'] ?? null,
+            'satuan'           => $valid['satuan'],
+            'deskripsi'        => $valid['deskripsi'] ?? null,
+            'barcode'          => $valid['barcode'] ?? null,
+            'foto'             => $valid['foto'] ?? null,
+            'kategori'         => $valid['kategori'] ?? null,
+            'diskon'           => $valid['diskon'] ?? 0,
+            'bundle'           => $valid['bundle'] ?? null,
         ]);
 
         // Set stok awal via ketersediaan log
@@ -84,7 +119,23 @@ class ProdukWebController extends Controller
             'stok'       => 'nullable|integer|min:0',
         ]);
 
+        // Bulatkan harga jual sesuai aturan rounding
+        $hargaLama = (float) $produk->harga;
+        $hargaBaru = HasRounding::bulatkanHarga($valid['harga']);
+        $valid['harga'] = $hargaBaru;
+
         $produk->update($valid);
+
+        // Catat perubahan harga ke HargaHistory jika harga berubah
+        if ($hargaBaru !== $hargaLama) {
+            HargaHistory::create([
+                'warung_produk_id' => $produk->id,
+                'harga_lama'       => $hargaLama,
+                'harga_baru'       => $hargaBaru,
+                'outlet_id'        => $produk->outlet_id,
+                'dicatat_pada'     => now(),
+            ]);
+        }
 
         // Update stok jika field stok dikirim
         if ($request->has('stok')) {
@@ -291,7 +342,7 @@ class ProdukWebController extends Controller
      */
     public function lookupByBarcode($barcode)
     {
-        // 1. Cari di database lokal
+        // 1. Cari di warung_produk (outlet lokal)
         $produk = Produk::where('barcode', $barcode)->first();
         if ($produk) {
             return response()->json([
@@ -306,7 +357,22 @@ class ProdukWebController extends Controller
             ]);
         }
 
-        // 2. Fallback: Open Food Facts (gratis, cakupan internasional)
+        // 2. Cari di produk_master (katalog global)
+        $master = ProdukMaster::findByBarcode($barcode);
+        if ($master) {
+            return response()->json([
+                'found'      => true,
+                'source'     => 'master',
+                'master_id'  => $master->id,
+                'nama'       => $master->nama,
+                'deskripsi'  => $master->deskripsi,
+                'het'        => $master->het,
+                'satuan'     => 'pcs',
+                'foto'       => $master->foto,
+            ]);
+        }
+
+        // 3. Fallback: Open Food Facts (gratis, cakupan internasional)
         try {
             $url = "https://world.openfoodfacts.org/api/v0/product/{$barcode}.json";
             $ch = curl_init($url);

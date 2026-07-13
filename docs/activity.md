@@ -35,6 +35,42 @@
 
 ## Log Aktivitas
 
+### [2026-07-13] [Komputer: Laptop 1] — ✅ Sesi 28 — Integrasi Tiga Lapisan Produk + Admin Kategori + Google Login Admin
+
+**Aktivitas:**
+- [x] **Arsitektur Tiga Lapisan Produk (Lanjutan Sesi 26):**
+  - Migration `2026_07_13_000003_add_master_ref_to_warung_produk` — `produk_master_id` FK nullable di `warung_produk`
+  - Migration `2026_07_13_000004_create_harga_produk_history_table` — log perubahan harga_jual
+  - Migration `2026_07_13_000005_add_varian_netto_harga_grosir_to_warung_produk` — kolom `varian`, `netto`, `harga_grosir`, `min_qty_grosir` di `warung_produk`
+  - Model `Kategori` dibuat (`Modules/Warung/app/Models/Kategori.php`) — parent(), children(), produkMaster()
+  - Model `HargaHistory` diupdate — `$fillable` sesuai migration baru
+  - Model `Produk` diupdate — fillable + varian, netto, harga_grosir, min_qty_grosir
+- [x] **Update `ProdukWebController`:**
+  - `store()`: panggil `HasRounding::bulatkanHarga()`, auto-register ke `produk_master` jika barcode belum ada
+  - `update()`: panggil `bulatkanHarga()` + catat `HargaHistory` jika harga berubah
+  - `lookupByBarcode()`: tambah lookup ke `ProdukMaster::findByBarcode()` (Lapis 2)
+- [x] **Update `kelola-produk.blade.php`:**
+  - Form: varian, netto, foto (URL), kategori bertingkat (cascading dropdown parent→sub), harga grosir + min qty
+  - Card produk: tampil HET + badge 📦 Master + kategori
+  - JS: `muatSubKategori()` cascading, `resetForm()` reset field baru, `cariProdukByBarcode()` handle `source='master'`
+- [x] **Halaman Admin Kategori:**
+  - Enable module Admin (`modules_statuses.json`)
+  - Controller `KategoriController` (CRUD + proteksi hapus)
+  - View `kategori/index.blade.php` — tabel + form tambah/edit
+  - Route `admin/kategori` (index, store, update, destroy)
+  - Sidebar link di `layouts/master.blade.php`
+- [x] **Admin Login Fix + Google Login:**
+  - Fix error `Unknown column 'hp'` → ganti `where('hp', ...)` ke `where('no_hp', ...)` di `AdminAuthController::login()`
+  - Tambah `redirectToGoogle()` + `handleGoogleCallback()` dengan auto-create user
+  - View login: tombol "Login dengan Google"
+- [x] **Admin Email Recognition:**
+  - `.env`: tambah `ADMIN_EMAIL=jagoandepe@gmail.com`
+  - Migration `2026_07_13_000006_add_is_admin_to_users` — kolom `is_admin` di tabel `users`
+  - `AdminMiddleware`: cek `is_admin=true` sebelum izinkan akses
+  - `handleGoogleCallback()`: set `is_admin=true` otomatis jika email = `ADMIN_EMAIL`
+
+---
+
 ### [2026-07-13] [Komputer: Laptop 1] — ✅ Sesi 26 — Arsitektur Tiga Lapisan Produk (produk_master + kategori berjenjang + rounding rules)
 
 **Aktivitas:**

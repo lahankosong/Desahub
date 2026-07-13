@@ -6,5 +6,5 @@
     "Order": true,
     "Payment": true,
     "Kurir": true,
-    "Admin": false
+    "Admin": true
 }

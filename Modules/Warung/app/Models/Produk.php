@@ -11,7 +11,8 @@ class Produk extends Model implements Sellable
     protected $table = 'warung_produk';
 
     protected $fillable = [
-        'outlet_id', 'produk_master_id', 'nama', 'harga', 'harga_beli',
+        'outlet_id', 'produk_master_id', 'nama', 'varian', 'netto',
+        'harga', 'harga_grosir', 'min_qty_grosir', 'harga_beli',
         'satuan', 'deskripsi', 'barcode', 'foto', 'kategori', 'diskon', 'bundle',
     ];
 

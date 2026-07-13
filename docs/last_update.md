@@ -1,5 +1,38 @@
 # Last Update — Ekosistem Warung
 
+## Sesi 28 — Integrasi Tiga Lapisan Produk + Admin Kategori + Google Login Admin (13 Juli 2026)
+
+### Konteks
+Melanjutkan Sesi 27, di mana arsitektur tiga lapisan produk sudah siap di tingkat database dan model namun belum diimplementasikan di view/UI. Sesi ini melengkapi integrasi frontend di view `kelola-produk.blade.php`, memperbaiki logic di `ProdukWebController`, serta mengaktifkan modul `Admin` untuk manajemen kategori mandiri dan Google Login Admin dengan rekognisi email pengelola.
+
+### A. Integrasi Tiga Lapisan Produk ke View & Controller
+- **Model `Produk` & Database:** Ditambahkan kolom `varian`, `netto`, `harga_grosir`, dan `min_qty_grosir` via migration `2026_07_13_000005_add_varian_netto_harga_grosir_to_warung_produk.php`.
+- **View `kelola-produk.blade.php`:**
+  - Ditambahkan field-field input: Varian, Netto, Foto (URL), Kategori Bertingkat (cascading dropdown utama → sub), Harga Grosir (harga + minimal qty pembelian).
+  - Ditambahkan penayangan HET, Kategori, dan badge khusus 📦 Master untuk produk yang terhubung ke katalog global.
+  - Ditambahkan JavaScript `muatSubKategori()` cascading dan integrasi lookup barcode ke `ProdukMaster` (Lapis 2) yang otomatis mengisikan `produk_master_id` serta menampilkan info HET.
+- **`ProdukWebController`:**
+  - Method `store()`: memanggil `HasRounding::bulatkanHarga()`, mendaftarkan produk secara otomatis ke katalog global `produk_master` jika barcode baru di-scan dan belum terdaftar.
+  - Method `update()`: memanggil `bulatkanHarga()` serta mencatat riwayat perubahan harga ke `harga_produk_history` (`HargaHistory`) jika terdeteksi perubahan harga jual.
+  - Method `lookupByBarcode()`: ditambahkan pencarian Lapis 2 ke `ProdukMaster` sebelum Open Food Facts.
+
+### B. Halaman Admin Kategori Produk
+- Modul `Admin` diaktifkan via `modules_statuses.json`.
+- Dibuat controller `KategoriController` (`Modules/Admin/app/Http/Controllers/Admin/KategoriController.php`) untuk melakukan CRUD kategori dengan proteksi penghapusan (kategori tidak dapat dihapus jika masih memiliki sub-kategori atau digunakan produk master).
+- Dibuat view `kategori/index.blade.php` untuk menampilkan tabel daftar kategori, mengedit, menghapus, serta menambahkan kategori.
+- Ditambahkan rute admin kategori dan sidebar link navigasi.
+
+### C. Admin Login Fix + Google Login + Email Recognition
+- **Fix Bug Admin Login:** Memperbaiki column mismatch di `AdminAuthController::login()` yang mencari `hp` (seharusnya `no_hp` sesuai skema user terbaru).
+- **Google Login Admin:** Ditambahkan metode `redirectToGoogle()` dan `handleGoogleCallback()` untuk login admin yang aman dan cepat via Google OAuth.
+- **Admin Email Recognition:**
+  - Ditambahkan konfigurasi `.env` `ADMIN_EMAIL=jagoandepe@gmail.com`.
+  - Ditambahkan migration `2026_07_13_000006_add_is_admin_to_users` untuk kolom `is_admin` di tabel `users`.
+  - `AdminMiddleware` diperketat untuk memeriksa field `is_admin`.
+  - `handleGoogleCallback()` otomatis menandai user sebagai `is_admin` jika email Google-nya cocok dengan `ADMIN_EMAIL` yang dikonfigurasi.
+
+---
+
 ## Sesi 27 — Arsitektur Tiga Lapisan Produk + Chat Polling + Order Refactor (13 Juli 2026)
 
 ### Konteks

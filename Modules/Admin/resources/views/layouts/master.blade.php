@@ -33,6 +33,10 @@
                    class="flex items-center gap-3 px-4 py-2.5 rounded-lg {{ request()->routeIs('admin.payments.*') ? 'bg-blue-600' : 'hover:bg-gray-700' }}">
                     <i class="fas fa-money-bill w-5"></i> COD Settlement
                 </a>
+                <a href="{{ route('admin.kategori.index') }}" 
+                   class="flex items-center gap-3 px-4 py-2.5 rounded-lg {{ request()->routeIs('admin.kategori.*') ? 'bg-blue-600' : 'hover:bg-gray-700' }}">
+                    <i class="fas fa-tags w-5"></i> Kategori Produk
+                </a>
                 <hr class="border-gray-700 my-2">
                 <form action="{{ route('admin.logout') }}" method="POST" class="mt-4">
                     @csrf

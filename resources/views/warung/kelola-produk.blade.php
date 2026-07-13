@@ -36,6 +36,9 @@
             <input type="hidden" id="produk-method" name="_method" value="POST">
             <input type="hidden" id="produk-id" name="produk_id" value="">
 
+            {{-- Hidden produk_master_id (dari lookup barcode) --}}
+            <input type="hidden" name="produk_master_id" id="produk-master-id" value="">
+
             {{-- Barcode --}}
             <div class="mb-3">
                 <label class="form-label fw-semibold" style="font-size: 0.85rem;">Barcode <span class="text-muted fw-normal">(opsional)</span></label>
@@ -47,7 +50,7 @@
                         <i class="bi bi-upc-scan"></i> Scan
                     </button>
                 </div>
-                <small class="text-muted" style="font-size: 0.7rem;">Barcode otomatis cari nama produk dari database (jika ada)</small>
+                <small class="text-muted" style="font-size: 0.7rem;">Barcode otomatis cari nama produk dari database lokal & katalog global</small>
             </div>
 
             {{-- Nama Produk --}}
@@ -55,6 +58,54 @@
                 <label class="form-label fw-semibold" style="font-size: 0.85rem;">Nama Produk</label>
                 <input type="text" name="nama" id="produk-nama" class="form-control" placeholder="Contoh: Beras 5kg" required
                        style="border-color: var(--warna-netral-garis); background: #fff;">
+            </div>
+
+            {{-- Varian --}}
+            <div class="mb-3">
+                <label class="form-label fw-semibold" style="font-size: 0.85rem;">Varian <span class="text-muted fw-normal">(opsional)</span></label>
+                <input type="text" name="varian" id="produk-varian" class="form-control" placeholder="Contoh: Premium, Cap Pohon, dll"
+                       style="border-color: var(--warna-netral-garis); background: #fff;">
+                <small class="text-muted" style="font-size: 0.7rem;">Varian produk jika ada (misal: rasa, warna, ukuran)</small>
+            </div>
+
+            {{-- Netto --}}
+            <div class="mb-3">
+                <label class="form-label fw-semibold" style="font-size: 0.85rem;">Netto <span class="text-muted fw-normal">(opsional, gram/ml)</span></label>
+                <input type="number" name="netto" id="produk-netto" class="form-control" placeholder="Contoh: 5000 (berarti 5kg)" step="0.01" min="0"
+                       style="border-color: var(--warna-netral-garis); background: #fff;">
+                <small class="text-muted" style="font-size: 0.7rem;">Berat bersih dalam gram (contoh: 5000 = 5kg, 1000 = 1kg)</small>
+            </div>
+
+            {{-- Kategori (dari tabel kategoris) — bertingkat --}}
+            <div class="mb-3">
+                <label class="form-label fw-semibold" style="font-size: 0.85rem;">Kategori</label>
+                <div class="row g-1">
+                    <div class="col-6">
+                        <select id="kategori-parent" class="form-select form-select-sm"
+                                style="border-color: var(--warna-netral-garis); background: #fff;"
+                                onchange="muatSubKategori()">
+                            <option value="">-- Kategori Utama --</option>
+                            @foreach ($kategoriList as $kat)
+                                <option value="{{ $kat->id }}">{{ $kat->nama }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <select name="kategori" id="produk-kategori" class="form-select form-select-sm"
+                                style="border-color: var(--warna-netral-garis); background: #fff;">
+                            <option value="">-- Sub Kategori (jika ada) --</option>
+                        </select>
+                    </div>
+                </div>
+                <small class="text-muted" style="font-size: 0.7rem;">Pilih kategori utama dulu, lalu sub kategori (jika ada)</small>
+            </div>
+
+            {{-- Foto (URL) --}}
+            <div class="mb-3">
+                <label class="form-label fw-semibold" style="font-size: 0.85rem;">Foto Produk <span class="text-muted fw-normal">(opsional)</span></label>
+                <input type="url" name="foto" id="produk-foto" class="form-control" placeholder="URL gambar produk"
+                       style="border-color: var(--warna-netral-garis); background: #fff;">
+                <small class="text-muted" style="font-size: 0.7rem;">Masukkan URL gambar (contoh: https://example.com/foto.jpg)</small>
             </div>
 
             {{-- Deskripsi --}}
@@ -78,6 +129,24 @@
                             <option value="{{ $sat }}">{{ $sat }}</option>
                         @endforeach
                     </select>
+                </div>
+            </div>
+
+            {{-- Harga Grosir --}}
+            <div class="card border-0 mb-3" style="background-color: #f8f9fa;">
+                <div class="card-body py-2">
+                    <small class="fw-semibold" style="font-size: 0.8rem;">🏪 Harga Grosir <span class="text-muted fw-normal">(opsional)</span></small>
+                    <div class="row g-1 mt-1">
+                        <div class="col-7">
+                            <input type="number" name="harga_grosir" id="produk-harga-grosir" class="form-control form-control-sm" placeholder="Harga grosir per item" min="0"
+                                   style="border-color: var(--warna-netral-garis); background: #fff;">
+                        </div>
+                        <div class="col-5">
+                            <input type="number" name="min_qty_grosir" id="produk-min-qty-grosir" class="form-control form-control-sm" placeholder="Min. beli" min="1"
+                                   style="border-color: var(--warna-netral-garis); background: #fff;">
+                        </div>
+                    </div>
+                    <small class="text-muted" style="font-size: 0.7rem;">Harga khusus untuk pembelian dalam jumlah besar</small>
                 </div>
             </div>
 
@@ -141,6 +210,9 @@
                     <div>
                         <div class="fw-bold" style="font-family: var(--font-judul);">{{ $p['nama'] }}</div>
                         <small class="text-muted">{{ $p['deskripsi'] ?? '' }}</small>
+                        @if (!empty($p['kategori']))
+                            <br><small class="text-muted" style="font-size: 0.7rem;">📁 {{ $p['kategori'] }}</small>
+                        @endif
                     </div>
                     <div class="text-end">
                         <span class="fw-bold fs-5 d-block" style="font-family: var(--font-judul); color: {{ $tersedia ? 'var(--warna-aksen-utama)' : '#9E9E9E' }};">
@@ -151,6 +223,14 @@
                             <small class="text-muted" style="font-size: 0.7rem;">
                                 Margin: {{ $margin >= 0 ? '+' : '' }}Rp{{ number_format($margin, 0, ',', '.') }}
                             </small>
+                        @endif
+                        @if (!empty($p['het']))
+                            <br><small class="text-muted" style="font-size: 0.7rem;">
+                                HET: Rp{{ number_format($p['het'], 0, ',', '.') }}
+                            </small>
+                        @endif
+                        @if (!empty($p['produk_master_id']))
+                            <br><span class="badge rounded-pill" style="background-color: var(--warna-aksen-kedua); color: #fff; font-size: 0.6rem;">📦 Master</span>
                         @endif
                     </div>
                 </div>
@@ -226,11 +306,22 @@
         document.getElementById('produk-method').value = 'POST';
         document.getElementById('produk-id').value = '';
         document.getElementById('produk-nama').value = '';
+        document.getElementById('produk-varian').value = '';
+        document.getElementById('produk-netto').value = '';
         document.getElementById('produk-deskripsi').value = '';
         document.getElementById('produk-harga').value = '';
+        document.getElementById('produk-harga-grosir').value = '';
+        document.getElementById('produk-min-qty-grosir').value = '';
         document.getElementById('produk-satuan').value = 'kg';
         document.getElementById('produk-harga-beli').value = '';
         document.getElementById('produk-stok').value = '';
+        document.getElementById('produk-diskon').value = '';
+        document.getElementById('produk-bundle').value = '';
+        document.getElementById('produk-foto').value = '';
+        document.getElementById('kategori-parent').value = '';
+        document.getElementById('produk-kategori').innerHTML = '<option value="">-- Sub Kategori (jika ada) --</option>';
+        document.getElementById('produk-master-id').value = '';
+        document.getElementById('produk-barcode').value = '';
         document.getElementById('produk-form').action = '{{ route('warung.produk.store') }}';
     }
 
@@ -302,6 +393,25 @@
     `;
     document.head.appendChild(style);
 
+    // ===== SUB KATEGORI (cascading dropdown) =====
+    const subKategoriData = @json($subKategoriList ?? []);
+
+    function muatSubKategori() {
+        const parentId = document.getElementById('kategori-parent').value;
+        const subSelect = document.getElementById('produk-kategori');
+        subSelect.innerHTML = '<option value="">-- Sub Kategori (jika ada) --</option>';
+
+        if (!parentId) return;
+
+        const subs = subKategoriData[parentId] || [];
+        subs.forEach(function(s) {
+            const opt = document.createElement('option');
+            opt.value = s.nama;
+            opt.textContent = s.nama;
+            subSelect.appendChild(opt);
+        });
+    }
+
     // ===== SCAN BARCODE (QuaggaJS) =====
     let scannerActive = false;
 
@@ -364,6 +474,14 @@
                 if (data.harga) document.getElementById('produk-harga').value = data.harga;
                 if (data.satuan) document.getElementById('produk-satuan').value = data.satuan;
                 if (data.deskripsi) document.getElementById('produk-deskripsi').value = data.deskripsi;
+
+                // Jika dari produk_master (katalog global), set hidden field + tampilkan HET
+                if (data.source === 'master') {
+                    document.getElementById('produk-master-id').value = data.master_id || '';
+                    if (data.het) {
+                        document.getElementById('scan-status').textContent += ' | HET: Rp' + Number(data.het).toLocaleString('id-ID');
+                    }
+                }
             }
         })
         .catch(() => {});
