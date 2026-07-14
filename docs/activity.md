@@ -35,6 +35,53 @@
 
 ## Log Aktivitas
 
+### [2026-07-14] [Komputer: Laptop 1] — ✅ Perbaikan Error Runtime (outlet_vertikal, kategoris.is_active, Piutang::pelangganWarung)
+
+**Aktivitas:**
+- [x] **Fix error `outlet_vertikal` table missing** — buat migration baru `2026_07_14_000001_create_outlet_vertikal_table.php`
+- [x] **Fix error `kategoris.is_active` column missing** — buat migration idempotent `2026_07_14_000002_add_is_active_to_kategoris.php`
+- [x] **Fix error `Piutang::pelangganWarung` relation not found** — tambah alias `pelangganWarung()` di model `Piutang`
+
+**File baru:**
+- `Modules/Outlet/database/migrations/2026_07_14_000001_create_outlet_vertikal_table.php`
+- `database/migrations/2026_07_14_000002_add_is_active_to_kategoris.php`
+
+**File diubah:**
+- `Modules/Warung/app/Models/Piutang.php` — tambah `pelangganWarung()` relation alias
+
+**Error ditemukan & difix:**
+| # | Error | Penyebab | Solusi | Status |
+|---|-------|----------|--------|--------|
+| 48 | `Table 'desahub.outlet_vertikal' doesn't exist` | Model & controller sudah ada, migration belum dibuat | Buat migration baru | ✅ |
+| 49 | `Unknown column 'is_active' in 'where clause'` (kategoris) | Migration 000006 belum ter-apply | Migration idempotent baru | ✅ |
+| 50 | `Call to undefined relationship [pelangganWarung] on model [Piutang]` | Controller pakai `with('pelangganWarung')`, model hanya punya `pelanggan()` | Tambah alias `pelangganWarung()` | ✅ |
+
+---
+
+### [2026-07-14] [Komputer: Laptop 1] — ✅ Fix Error Pembayaran POS (Server response non-JSON / 500 HTML)
+
+**Aktivitas:**
+- [x] **Fix error `prosesPembayaran()` gagal** — frontend `pos.blade.php` dapat response HTML (bukan JSON) dari `POST /warung/pos/transaksi`, tampil sebagai "Server response (non-JSON)"
+- [x] **Hapus double-reduction stok di `PosController::transaksi()`** — sebelumnya stok dikurangi manual (tambahCache -qty + catatPergerakan) DAN lagi via `WarungKetersediaanListener` (dipicu `emitOrderDibuat()`). Sekarang stok hanya dikurangi sekali oleh listener, konsisten dengan `CheckoutController`
+- [x] **Fix `OrderDibuat` event nullable `buyer_id`** — `Modules\Order\app\Events\OrderDibuat::__construct()` mewajibkan `int $buyer_id`, tapi transaksi tunai/Umum (`buyer_type='Umum'`) mengirim `null` → `TypeError` → 500 HTML. Diubah ke `?int $buyer_id`
+
+**File diubah:**
+- `app/Http/Controllers/Warung/PosController.php` — hapus blok pengurangan stok manual di `transaksi()`
+- `Modules/Order/app/Events/OrderDibuat.php` — `int $buyer_id` → `?int $buyer_id` (property + constructor)
+
+**Error ditemukan & difix:**
+| # | Error | Penyebab | Solusi | Status |
+|---|-------|----------|--------|--------|
+| 46 | `OrderDibuat::__construct(): Argument #4 ($buyer_id) must be of type int, null given` (cash/Umum POS) | Event mewajibkan `int`, tapi `PosController` set `buyer_id=null` untuk walk-in | Ubah signature event ke `?int $buyer_id` | ✅ |
+| 47 | Double-reduction stok POS (stok berkurang 2x per transaksi) | `PosController` kurangi stok manual + listener kurangi lagi | Hapus reduksi manual di controller, serahkan ke listener | ✅ |
+
+**Catatan:**
+- `KetersediaanBerubah::dispatch()` di listener tidak punya listener terdaftar → no-op, tidak memicu error
+- `KurirListener` & `WarungKetersediaanListener` tidak bergantung pada `buyer_id` non-null → aman
+- Setelah fix, `POST /warung/pos/transaksi` kembalikan JSON `{success:true, order_id, metode}` ✅ (diuji user)
+
+---
+
 ### [2026-07-13] [Komputer: Laptop 1] — ✅ Sesi 28 — Integrasi Tiga Lapisan Produk + Admin Kategori + Google Login Admin
 
 **Aktivitas:**

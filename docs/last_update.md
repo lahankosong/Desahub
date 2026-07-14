@@ -1,5 +1,31 @@
 # Last Update — Ekosistem Warung
 
+## Sesi 29 — Perbaikan UI Order Masuk & Struk POS (14 Juli 2026)
+
+### Konteks
+User meminta perbaikan tampilan `order-masuk.blade.php` dan `pos-struk.blade.php` agar lebih rapi, tidak terlalu besar font, dan lebih compact.
+
+### Perubahan
+- **order-masuk.blade.php:**
+  - Font size dikurangi menjadi 0.65rem - 0.85rem (sebelumnya 0.7rem - 0.95rem)
+  - Padding card body: `py-2 px-2.5` (lebih kecil)
+  - Tombol action: `px-2 py-0.5` dengan `font-size:0.65rem`
+  - Badge status: `0.6rem` dan `0.7rem`
+  - Icon empty state: `display-4` (sebelumnya `display-3`)
+  - Modal struk: header padding `py-1.5`, font `0.85rem`
+- **pos-struk.blade.php:**
+  - Lebar struk: 280px (sebelumnya 320px)
+  - Font lebih kecil: `text-sm`, `text-xs`, `text-[10px]`, `text-[9px]`
+  - Padding lebih kecil: `py-3 px-2` body, `12px 14px` struk area
+  - Tombol: `px-2.5 py-1`
+  - Print page size: `70mm auto` (sebelumnya `80mm auto`)
+
+### File diubah
+- `resources/views/warung/order-masuk.blade.php` — compact styling
+- `resources/views/warung/pos-struk.blade.php` — compact styling
+
+---
+
 ## Sesi 28 — Integrasi Tiga Lapisan Produk + Admin Kategori + Google Login Admin (13 Juli 2026)
 
 ### Konteks
